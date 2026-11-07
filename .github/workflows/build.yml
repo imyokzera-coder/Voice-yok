@@ -29,8 +29,12 @@ jobs:
         pip install --upgrade pip
         pip install --upgrade cython==0.29.36 buildozer
 
-    - name: Build APK with Buildozer
+    - name: Accept Android Licenses and Build APK
       run: |
+        # Автоматически принимаем лицензии Android SDK, чтобы build-tools установились без ошибок
+        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
+        yes | buildozer -v android debug || true
+        # Запускаем повторно для уверенности, что всё подхватилось
         buildozer -v android debug
 
     - name: Upload APK artifact
