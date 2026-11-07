@@ -1,4 +1,3 @@
-
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
@@ -33,9 +32,9 @@ class CardLayout(BoxLayout):
     def update_canvas(self, *args):
         self.canvas.before.clear()
         with self.canvas.before:
-            Color(0.15, 0.18, 0.25, 1) # Тонкая рамка
+            Color(0.15, 0.18, 0.25, 1)
             RoundedRectangle(pos=(self.x-1, self.y-1), size=(self.width+2, self.height+2), radius=[22])
-            Color(0.10, 0.12, 0.17, 1) # Фон карточки
+            Color(0.10, 0.12, 0.17, 1)
             RoundedRectangle(pos=self.pos, size=self.size, radius=[20])
 
 class IPBadge(BoxLayout):
@@ -47,7 +46,6 @@ class IPBadge(BoxLayout):
         self.spacing = 5
         self.bind(pos=self.update_canvas, size=self.update_canvas)
         
-        # Индикатор и IP
         top_row = BoxLayout(size_hint=(1, 0.5), spacing=8)
         with top_row.canvas.before:
             Color(*status_color)
@@ -79,7 +77,6 @@ class HomeScreen(Screen):
             RoundedRectangle(pos=self.x, size=main_layout.size)
         main_layout.bind(size=lambda *_: None, pos=lambda *_: None)
 
-        # Верхняя панель
         top_bar = BoxLayout(size_hint=(1, 0.1), spacing=10)
         logo_label = Label(text="⚡  voice yok", font_size=20, bold=True, color=(1, 1, 1, 1), halign='left', valign='middle')
         logo_label.bind(size=logo_label.setter('text_size'))
@@ -89,7 +86,6 @@ class HomeScreen(Screen):
         top_bar.add_widget(settings_btn)
         main_layout.add_widget(top_bar)
 
-        # Заголовок
         header_box = BoxLayout(orientation='vertical', size_hint=(1, 0.25), spacing=5)
         badge_label = Label(text="🟢 ЛИЧНЫЕ КОМНАТЫ • P2P", font_size=12, color=(0.2, 0.8, 0.4, 1), halign='left', valign='middle')
         badge_label.bind(size=badge_label.setter('text_size'))
@@ -104,7 +100,6 @@ class HomeScreen(Screen):
         header_box.add_widget(desc_label)
         main_layout.add_widget(header_box)
 
-        # Карточка ввода
         card = CardLayout(orientation='vertical', size_hint=(1, 0.55), padding=20, spacing=15)
         
         name_title = Label(text="ВАШЕ ИМЯ", font_size=11, color=(0.5, 0.55, 0.65, 1), halign='left', size_hint=(1, 0.1))
@@ -231,7 +226,7 @@ class RoomReadyScreen(Screen):
         self.code_label.text = App.get_running_app().room_code
 
     def copy_code(self, instance):
-        self.share_df = "✓ Скопировано!"
+        self.share_btn.text = "✓ Скопировано!"
         Clock.schedule_once(lambda dt: setattr(self.share_btn, 'text', '📋 Поделиться кодом'), 2)
 
 
@@ -246,7 +241,6 @@ class ActiveRoomScreen(Screen):
             RoundedRectangle(pos=self.pos, size=main_layout.size)
         main_layout.bind(size=lambda *_: None, pos=lambda *_: None)
 
-        # Верхняя панель
         top_box = BoxLayout(size_hint=(1, 0.08), spacing=10)
         self.room_title = Label(text="Комната: ---", font_size=15, bold=True, color=(1, 1, 1, 1), halign='left', valign='middle')
         self.room_title.bind(size=self.room_title.setter('text_size'))
@@ -257,32 +251,25 @@ class ActiveRoomScreen(Screen):
         top_box.add_widget(leave_btn)
         main_layout.add_widget(top_box)
 
-        # 1. Секция участников и IPv4 плашек (Звонилка)
         audio_card = CardLayout(orientation='vertical', size_hint=(1, 0.38), padding=12, spacing=8)
         
         audio_header = Label(text="🎙️ ГОЛОСОВОЙ ЗВОНОК (P2P)", font_size=11, color=(0.2, 0.8, 0.4, 1), halign='left', size_hint=(1, 0.2))
         audio_header.bind(size=audio_header.setter('text_size'))
         audio_card.add_widget(audio_header)
 
-        # Аватарки и IP плашки в сетке
         grid_box = GridLayout(cols=2, spacing=10, size_hint=(1, 0.8))
-        
-        # Участник 1 (Вы)
         grid_box.add_widget(IPBadge("192.168.1.15 (Вы)", (0.2, 0.8, 0.4, 1)))
-        # Участник 2 (Собеседник)
         grid_box.add_widget(IPBadge("10.8.0.4 (peer)", (0.9, 0.7, 0.2, 1)))
         
         audio_card.add_widget(grid_box)
         main_layout.add_widget(audio_card)
 
-        # 2. Секция чата
         chat_card = CardLayout(orientation='vertical', size_hint=(1, 0.38), padding=12, spacing=8)
         
         chat_title = Label(text="💬 КОМНАТНЫЙ ЧАТ", font_size=11, color=(0.5, 0.6, 0.7, 1), halign='left', size_hint=(1, 0.15))
         chat_title.bind(size=chat_title.setter('text_size'))
         chat_card.add_widget(chat_title)
 
-        # История сообщений
         self.chat_scroll = ScrollView(size_hint=(1, 0.65))
         self.chat_history = Label(
             text="[Система]: Соединение установлено.\n[Алексей]: Всем привет!",
@@ -296,7 +283,6 @@ class ActiveRoomScreen(Screen):
         self.chat_scroll.add_widget(self.chat_history)
         chat_card.add_widget(self.chat_scroll)
 
-        # Поле ввода сообщения
         input_row = BoxLayout(size_hint=(1, 0.2), spacing=8)
         self.msg_input = TextInput(
             hint_text='Написать сообщение...',
@@ -315,7 +301,6 @@ class ActiveRoomScreen(Screen):
         chat_card.add_widget(input_row)
         main_layout.add_widget(chat_card)
 
-        # 3. Кнопки управления микрофоном и динамиком
         controls_box = BoxLayout(size_hint=(1, 0.12), spacing=10)
         
         self.mic_btn = RoundedButton(text="🎤 Микрофон ВКЛ", bg_color=(0.2, 0.6, 0.3, 1), size_hint=(0.6, 1))
