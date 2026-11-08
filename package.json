@@ -1,0 +1,16 @@
+{
+  "name": "voiceyok-server",
+  "version": "1.0.0",
+  "description": "VoiceYok Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5",
+    "livekit-server-sdk": "^1.2.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
