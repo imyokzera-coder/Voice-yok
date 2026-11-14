@@ -9,6 +9,9 @@
     "react": "19.3.0",
     "react-native": "0.88.1",
     "expo-audio": "*",
+    "expo-font": "*",
+    "expo-asset": "*",
+    "expo-dev-client": "*",
     "react-native-webrtc": "*",
     "socket.io-client": "*",
     "@config-plugins/react-native-webrtc": "*"
