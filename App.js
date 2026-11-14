@@ -5,7 +5,8 @@ import * as Animatable from 'react-native-animatable';
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer } from 'expo-audio';
 import { RTCPeerConnection, RTCView, mediaDevices, RTCIceCandidate, RTCSessionDescription } from 'react-native-webrtc';
 
-const CLICK_SOUND = require('./assets/sounds/click.mp3');
+// Путь к файлу звука (исправлен: без папки sounds)
+const CLICK_SOUND = require('./assets/click.mp3');
 
 const PulseIcon = ({ active, color, isMuted }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -60,7 +61,7 @@ export default function App() {
 
   const recordTimer = useRef(null);
   const serverIp = '192.168.0.100'; 
-  const ws = useRef(null); // Используем WebSocket вместо Socket.io
+  const ws = useRef(null); // Используем WebSocket
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const cardAnim = useRef(new Animated.Value(0)).current;
@@ -120,7 +121,6 @@ export default function App() {
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
 
       ws.current.onopen = () => {
-        // Сообщаем серверу, что мы зашли в комнату
         ws.current.send(JSON.stringify({ action: 'join', room: roomCode, user: name || 'Гость' }));
       };
 
