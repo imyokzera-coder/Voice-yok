@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TextInput, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform, Clipboard, Alert, Animated, TouchableWithoutFeedback, Easing, TouchableOpacity, Pressable, Vibration, Switch } from 'react-native';
+import { StyleSheet, Text, View, TextInput, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform, Clipboard, Alert, Animated, TouchableWithoutFeedback, Easing, TouchableOpacity, Vibration, Switch } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer } from 'expo-audio';
 import { RTCPeerConnection, RTCView, mediaDevices, RTCIceCandidate, RTCSessionDescription } from 'react-native-webrtc';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Путь к файлу звука (исправлен: без папки sounds)
 const CLICK_SOUND = require('./assets/click.mp3');
 
 const PulseIcon = ({ active, color, isMuted }) => {
@@ -53,15 +53,17 @@ export default function App() {
   const [myMicOn, setMyMicOn] = useState(true);
   const [remoteStream, setRemoteStream] = useState(null);
   const [callDuration, setCallDuration] = useState(0);
-  const [connectionType, setConnectionType] = useState('P2P'); 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
+  // IP Сервера
+  const [serverIp, setServerIp] = useState('192.168.0.100');
+  const [tempIp, setTempIp] = useState('192.168.0.100');
+
   const recordTimer = useRef(null);
-  const serverIp = '192.168.0.100'; 
-  const ws = useRef(null); // Используем WebSocket
+  const ws = useRef(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
   const cardAnim = useRef(new Animated.Value(0)).current;
@@ -70,11 +72,34 @@ export default function App() {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const player = useAudioPlayer();
 
-  // Звук кликов
   const clickPlayer = useAudioPlayer();
   const clickReady = useRef(false);
   const clickBusy = useRef(false);
   const lastClickAt = useRef(0);
+
+  // Загрузка сохраненного IP
+  useEffect(() => {
+    const loadIp = async () => {
+      try {
+        const savedIp = await AsyncStorage.getItem('@voiceyok_ip');
+        if (savedIp) {
+          setServerIp(savedIp);
+          setTempIp(savedIp);
+        }
+      } catch (e) {}
+    };
+    loadIp();
+  }, []);
+
+  const saveNewIp = async () => {
+    try {
+      await AsyncStorage.setItem('@voiceyok_ip', tempIp);
+      setServerIp(tempIp);
+      Alert.alert("Успех", "IP-адрес сервера обновлен!");
+    } catch (e) {
+      Alert.alert("Ошибка", "Не удалось сохранить IP");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +140,7 @@ export default function App() {
     } else { setCallDuration(0); }
   }, [isInCall]);
 
-  // Подключение к Python WebSocket
+  // Подключение WebSocket
   useEffect(() => {
     if (screen === 'room' && roomCode) {
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
@@ -138,7 +163,7 @@ export default function App() {
         if (peerConnection.current) peerConnection.current.close();
       };
     }
-  }, [screen, roomCode]);
+  }, [screen, roomCode, serverIp]);
 
   const handleSignal = async (data) => {
     if (data.type === 'offer') {
@@ -205,11 +230,15 @@ export default function App() {
     if (vibrationEnabled) Vibration.vibrate(10);
     const hasPermission = await requestPermission();
     if (!hasPermission) return;
-    try { await audioRecorder.stop(); } catch (e) {}
+
+    clearInterval(recordTimer.current); 
+    setRecordDuration(0);               
+    try { await audioRecorder.stop(); } catch (e) {} 
+
     await AudioModule.setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
     await audioRecorder.prepareToRecordAsync(); 
     audioRecorder.record();
-    setIsRecording(true); setRecordDuration(0);
+    setIsRecording(true); 
     recordTimer.current = setInterval(() => setRecordDuration(prev => prev + 1), 1000);
   };
 
@@ -263,7 +292,8 @@ export default function App() {
     }
   };
 
-  // --- РЕНДЕР ЭКРАНОВ ---
+  // --- ЭКРАНЫ ---
+
   if (screen === 'settings') {
     return (
       <SafeAreaView style={styles.container}>
@@ -271,12 +301,23 @@ export default function App() {
         <ScrollView style={{ padding: 20 }}>
           <Text style={styles.label}>МИКРОФОН</Text>
           <View style={styles.settingsCard}><Text style={{ color: '#fff', marginBottom: 10 }}>Проверка микрофона</Text><SmoothButton style={styles.primaryBtn} onPress={testMicrophone}><Text style={styles.primaryBtnText}>Записать и прослушать</Text></SmoothButton></View>
+          
           <Text style={styles.label}>ИНТЕРФЕЙС</Text>
           <View style={styles.settingsCard}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ color: '#fff' }}>Вибрация</Text>
               <Switch value={vibrationEnabled} onValueChange={setVibrationEnabled} trackColor={{ true: '#5865F2' }} />
             </View>
+          </View>
+
+          <Text style={styles.label}>ТЕСТОВАЯ ФУНКЦИЯ: IP СЕРВЕРА</Text>
+          <View style={styles.settingsCard}>
+            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>По умолчанию: 192.168.0.103</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="server-outline" size={20} color="#71717a" style={styles.inputIcon} />
+              <TextInput style={styles.input} value={tempIp} onChangeText={setTempIp} placeholder="192.168.x.x" placeholderTextColor="#71717a" keyboardType="numbers-and-punctuation" />
+            </View>
+            <SmoothButton style={styles.primaryBtn} onPress={saveNewIp}><Text style={styles.primaryBtnText}>Сохранить IP</Text></SmoothButton>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -340,9 +381,9 @@ export default function App() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.bottomBar}>
             <TextInput style={styles.chatInput} placeholder="Сообщение..." placeholderTextColor="#71717a" value={msg} onChangeText={setMsg} />
-            <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} style={({ pressed }) => [styles.micBtnSmall, (isRecording || pressed) && { backgroundColor: '#da373c' }]}>
+            <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={0.7} style={[styles.micBtnSmall, isRecording && { backgroundColor: '#da373c' }]}>
               <Ionicons name={isRecording ? "mic" : "mic-outline"} size={22} color={isRecording ? "#fff" : "#a1a1aa"} />
-            </Pressable>
+            </TouchableOpacity>
             <SmoothButton style={styles.sendBtn} onPress={sendMsg}><Ionicons name="send" size={20} color="#fff" /></SmoothButton>
           </View>
         </KeyboardAvoidingView>
