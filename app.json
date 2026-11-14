@@ -29,8 +29,7 @@
         "android.permission.INTERNET",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE"
-      ],
-      "enableProguardInReleaseBuilds": false
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,6 +39,15 @@
         "expo-audio",
         {
           "microphonePermission": "Разрешить доступ к микрофону"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": false,
+            "enableProguardInReleaseBuilds": false
+          }
         }
       ]
     ],
