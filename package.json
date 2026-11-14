@@ -15,7 +15,8 @@
     "react-native-webrtc": "*",
     "socket.io-client": "*",
     "@config-plugins/react-native-webrtc": "*",
-    "react-native-animatable": "*"
+    "react-native-animatable": "*",
+    "expo-build-properties": "*"
   },
   "scripts": {
     "start": "expo start",
