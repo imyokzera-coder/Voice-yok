@@ -4,7 +4,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer } from 'expo-audio';
 import { RTCPeerConnection, RTCView, mediaDevices, RTCIceCandidate, RTCSessionDescription } from 'react-native-webrtc';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CLICK_SOUND = require('./assets/click.mp3');
 
@@ -58,9 +57,8 @@ export default function App() {
   const [recordDuration, setRecordDuration] = useState(0);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
-  // Настройки IP
-  const [serverIp, setServerIp] = useState('192.168.0.103');
-  const [tempIp, setTempIp] = useState('192.168.0.103');
+  // ЖЕСТКО ЗАДАННЫЙ IP СЕРВЕРА
+  const serverIp = '192.168.0.100'; 
 
   const recordTimer = useRef(null);
   const ws = useRef(null);
@@ -76,30 +74,6 @@ export default function App() {
   const clickReady = useRef(false);
   const clickBusy = useRef(false);
   const lastClickAt = useRef(0);
-
-  // Загрузка сохраненного IP
-  useEffect(() => {
-    const loadIp = async () => {
-      try {
-        const savedIp = await AsyncStorage.getItem('@voiceyok_ip');
-        if (savedIp) {
-          setServerIp(savedIp);
-          setTempIp(savedIp);
-        }
-      } catch (e) {}
-    };
-    loadIp();
-  }, []);
-
-  const saveNewIp = async () => {
-    try {
-      await AsyncStorage.setItem('@voiceyok_ip', tempIp);
-      setServerIp(tempIp);
-      Alert.alert("Успех", "IP сохранен: " + tempIp);
-    } catch (e) {
-      Alert.alert("Ошибка", "Не удалось сохранить IP");
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -143,9 +117,6 @@ export default function App() {
   // Подключение WebSocket
   useEffect(() => {
     if (screen === 'room' && roomCode) {
-      // ДИАГНОСТИКА
-      Alert.alert("Подключение", "Пытаюсь подключиться к ws://" + serverIp + ":3000");
-      
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
 
       ws.current.onopen = () => {
@@ -162,8 +133,7 @@ export default function App() {
       };
 
       ws.current.onerror = (e) => {
-         // Если ошибка, показываем её на экране
-         Alert.alert("Ошибка подключения", e.message || "Не удалось соединиться");
+         Alert.alert("Ошибка WebSocket", e.message || "Не удалось подключиться");
       };
 
       return () => {
@@ -171,7 +141,7 @@ export default function App() {
         if (peerConnection.current) peerConnection.current.close();
       };
     }
-  }, [screen, roomCode, serverIp]);
+  }, [screen, roomCode]);
 
   const handleSignal = async (data) => {
     if (data.type === 'offer') {
@@ -318,14 +288,11 @@ export default function App() {
             </View>
           </View>
 
-          <Text style={styles.label}>ТЕСТОВАЯ ФУНКЦИЯ: IP СЕРВЕРА</Text>
+          <Text style={styles.label}>ИНФОРМАЦИЯ О СЕРВЕРЕ</Text>
           <View style={styles.settingsCard}>
-            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>Текущий в коде: {serverIp}</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="server-outline" size={20} color="#71717a" style={styles.inputIcon} />
-              <TextInput style={styles.input} value={tempIp} onChangeText={setTempIp} placeholder="192.168.x.x" placeholderTextColor="#71717a" keyboardType="numbers-and-punctuation" />
-            </View>
-            <SmoothButton style={styles.primaryBtn} onPress={saveNewIp}><Text style={styles.primaryBtnText}>Сохранить IP</Text></SmoothButton>
+            <Text style={{ color: '#fff', marginBottom: 5 }}>Текущий IP сервера:</Text>
+            <Text style={{ color: '#23a559', fontSize: 18, fontWeight: 'bold' }}>{serverIp}</Text>
+            <Text style={{ color: '#71717a', fontSize: 12, marginTop: 5 }}>Чтобы изменить, отредактируйте serverIp в коде App.js</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
