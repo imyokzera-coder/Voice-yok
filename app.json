@@ -6,16 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#09090b"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourname.voiceyok",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Приложению нужен доступ к микрофону для голосовых сообщений и звонков.",
+        "NSMicrophoneUsageDescription": "Микрофон для звонков.",
         "UIBackgroundModes": ["audio", "voip"]
       }
     },
