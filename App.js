@@ -58,7 +58,7 @@ export default function App() {
   const [recordDuration, setRecordDuration] = useState(0);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
-  // IP Сервера
+  // Настройки IP
   const [serverIp, setServerIp] = useState('192.168.0.100');
   const [tempIp, setTempIp] = useState('192.168.0.100');
 
@@ -143,11 +143,9 @@ export default function App() {
   // Подключение WebSocket
   useEffect(() => {
     if (screen === 'room' && roomCode) {
-      console.log(`Пытаюсь подключиться к ws://${serverIp}:3000...`);
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
 
       ws.current.onopen = () => {
-        console.log("WebSocket подключен успешно!");
         ws.current.send(JSON.stringify({ action: 'join', room: roomCode, user: name || 'Гость' }));
       };
 
@@ -158,10 +156,6 @@ export default function App() {
         } else if (data.action === 'signal') {
           handleSignal(data.payload);
         }
-      };
-
-      ws.current.onerror = (e) => {
-        console.log("ОШИБКА WebSocket:", e.message);
       };
 
       return () => {
@@ -318,7 +312,7 @@ export default function App() {
 
           <Text style={styles.label}>ТЕСТОВАЯ ФУНКЦИЯ: IP СЕРВЕРА</Text>
           <View style={styles.settingsCard}>
-            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>По умолчанию: 192.168.0.103</Text>
+            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>Текущий: {serverIp}</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="server-outline" size={20} color="#71717a" style={styles.inputIcon} />
               <TextInput style={styles.input} value={tempIp} onChangeText={setTempIp} placeholder="192.168.x.x" placeholderTextColor="#71717a" keyboardType="numbers-and-punctuation" />
@@ -387,9 +381,16 @@ export default function App() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.bottomBar}>
             <TextInput style={styles.chatInput} placeholder="Сообщение..." placeholderTextColor="#71717a" value={msg} onChangeText={setMsg} />
-            <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={0.7} style={[styles.micBtnSmall, isRecording && { backgroundColor: '#da373c' }]}>
+            
+            <TouchableOpacity 
+              onPressIn={() => { if (!isRecording) handlePressIn(); }} 
+              onPressOut={() => { if (isRecording) handlePressOut(); }} 
+              activeOpacity={0.7} 
+              style={[styles.micBtnSmall, isRecording && { backgroundColor: '#da373c' }]}
+            >
               <Ionicons name={isRecording ? "mic" : "mic-outline"} size={22} color={isRecording ? "#fff" : "#a1a1aa"} />
             </TouchableOpacity>
+
             <SmoothButton style={styles.sendBtn} onPress={sendMsg}><Ionicons name="send" size={20} color="#fff" /></SmoothButton>
           </View>
         </KeyboardAvoidingView>
