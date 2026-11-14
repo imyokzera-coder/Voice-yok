@@ -29,7 +29,9 @@
         "android.permission.INTERNET",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE"
-      ]
+      ],
+      "enableProguardInReleaseBuilds": true,
+      "extraProguardRules": "-keep class org.webrtc.** { *; }\n-keep class com.oney.WebRTCModule.** { *; }"
     },
     "web": {
       "favicon": "./assets/favicon.png"
