@@ -59,8 +59,8 @@ export default function App() {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
   // Настройки IP
-  const [serverIp, setServerIp] = useState('192.168.0.100');
-  const [tempIp, setTempIp] = useState('192.168.0.100');
+  const [serverIp, setServerIp] = useState('192.168.0.103');
+  const [tempIp, setTempIp] = useState('192.168.0.103');
 
   const recordTimer = useRef(null);
   const ws = useRef(null);
@@ -95,7 +95,7 @@ export default function App() {
     try {
       await AsyncStorage.setItem('@voiceyok_ip', tempIp);
       setServerIp(tempIp);
-      Alert.alert("Успех", "IP-адрес сервера обновлен!");
+      Alert.alert("Успех", "IP сохранен: " + tempIp);
     } catch (e) {
       Alert.alert("Ошибка", "Не удалось сохранить IP");
     }
@@ -143,6 +143,9 @@ export default function App() {
   // Подключение WebSocket
   useEffect(() => {
     if (screen === 'room' && roomCode) {
+      // ДИАГНОСТИКА
+      Alert.alert("Подключение", "Пытаюсь подключиться к ws://" + serverIp + ":3000");
+      
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
 
       ws.current.onopen = () => {
@@ -156,6 +159,11 @@ export default function App() {
         } else if (data.action === 'signal') {
           handleSignal(data.payload);
         }
+      };
+
+      ws.current.onerror = (e) => {
+         // Если ошибка, показываем её на экране
+         Alert.alert("Ошибка подключения", e.message || "Не удалось соединиться");
       };
 
       return () => {
@@ -312,7 +320,7 @@ export default function App() {
 
           <Text style={styles.label}>ТЕСТОВАЯ ФУНКЦИЯ: IP СЕРВЕРА</Text>
           <View style={styles.settingsCard}>
-            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>Текущий: {serverIp}</Text>
+            <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>Текущий в коде: {serverIp}</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="server-outline" size={20} color="#71717a" style={styles.inputIcon} />
               <TextInput style={styles.input} value={tempIp} onChangeText={setTempIp} placeholder="192.168.x.x" placeholderTextColor="#71717a" keyboardType="numbers-and-punctuation" />
