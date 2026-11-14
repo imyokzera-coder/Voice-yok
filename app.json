@@ -35,21 +35,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-audio",
-        {
-          "microphonePermission": "Разрешить доступ к микрофону"
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "enableMinifyInReleaseBuilds": false,
-            "enableProguardInReleaseBuilds": false
-          }
-        }
-      ]
+      ["expo-audio", {"microphonePermission": "Разрешить доступ к микрофону"}],
+      ["expo-build-properties", {"android": {"enableMinifyInReleaseBuilds": false, "enableProguardInReleaseBuilds": false}}]
     ],
     "extra": {
       "eas": {
