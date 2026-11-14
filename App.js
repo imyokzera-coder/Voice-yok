@@ -143,9 +143,11 @@ export default function App() {
   // Подключение WebSocket
   useEffect(() => {
     if (screen === 'room' && roomCode) {
+      console.log(`Пытаюсь подключиться к ws://${serverIp}:3000...`);
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
 
       ws.current.onopen = () => {
+        console.log("WebSocket подключен успешно!");
         ws.current.send(JSON.stringify({ action: 'join', room: roomCode, user: name || 'Гость' }));
       };
 
@@ -156,6 +158,10 @@ export default function App() {
         } else if (data.action === 'signal') {
           handleSignal(data.payload);
         }
+      };
+
+      ws.current.onerror = (e) => {
+        console.log("ОШИБКА WebSocket:", e.message);
       };
 
       return () => {
