@@ -22,6 +22,7 @@
         "backgroundColor": "#09090b"
       },
       "package": "com.yourname.voiceyok",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -35,8 +36,22 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      ["expo-audio", {"microphonePermission": "Разрешить доступ к микрофону"}],
-      ["expo-build-properties", {"android": {"enableMinifyInReleaseBuilds": false, "enableProguardInReleaseBuilds": false}}]
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Разрешить доступ к микрофону"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": false,
+            "enableProguardInReleaseBuilds": false,
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
