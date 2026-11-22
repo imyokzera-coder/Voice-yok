@@ -194,16 +194,29 @@ export default function App() {
         }
       };
       peerConnection.current.ontrack = (event) => setRemoteStream(event.streams[0]);
-    } catch (e) { console.error(e); }
+    } catch (e) { throw new Error("Микрофон недоступен: " + e.message); }
   };
 
   const startCall = async () => {
-    playClick();
-    setIsInCall(true); setIsSpeaking(true); setScreen('call');
-    await createPeerConnection();
-    const offer = await peerConnection.current.createOffer();
-    await peerConnection.current.setLocalDescription(offer);
-    ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { type: 'offer', signal: offer } }));
+    try {
+      playClick();
+      setIsInCall(true); setIsSpeaking(true); setScreen('call');
+      
+      Alert.alert("Отладка", "Кнопка нажата. Запрашиваю микрофон...");
+      
+      await createPeerConnection();
+      
+      Alert.alert("Отладка", "Микрофон получен. Создаю Offer...");
+      
+      const offer = await peerConnection.current.createOffer();
+      await peerConnection.current.setLocalDescription(offer);
+      
+      ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { type: 'offer', signal: offer } }));
+      
+      Alert.alert("Успех", "Сигнал звонка отправлен на сервер!");
+    } catch (e) {
+      Alert.alert("Ошибка звонка", e.message);
+    }
   };
 
   const endCall = () => {
@@ -346,7 +359,6 @@ export default function App() {
             <SmoothButton style={styles.actionBtn} onPress={copyCode}><Ionicons name="copy-outline" size={16} color="#a1a1aa" /><Text style={styles.actionBtnText}>Копировать ID</Text></SmoothButton>
             <Animated.View style={{ transform: [{ scale: menuBtnAnim }] }}><SmoothButton style={styles.squareBtn} onPress={toggleCard}><Ionicons name="menu" size={24} color="#a1a1aa" /></SmoothButton></Animated.View>
             
-            {/* КНОПКА ЗВОНКА */}
             <SmoothButton style={[styles.squareBtn, { backgroundColor: isInCall ? '#da373c' : '#1f3a29' }]} onPress={startCall}>
               <Ionicons name={isInCall ? "return-down-forward" : "call"} size={24} color="#fff" />
             </SmoothButton>
