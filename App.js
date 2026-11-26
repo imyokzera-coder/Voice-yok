@@ -43,6 +43,7 @@ const SmoothButton = ({ onPress, style, children, activeScale = 0.92 }) => {
 
 export default function App() {
   const [screen, setScreen] = useState('home');
+  const [activeTab, setActiveTab] = useState('chats'); // НОВОЕ: управление вкладками
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -201,18 +202,12 @@ export default function App() {
     try {
       playClick();
       setIsInCall(true); setIsSpeaking(true); setScreen('call');
-      
       Alert.alert("Отладка", "Кнопка нажата. Запрашиваю микрофон...");
-      
       await createPeerConnection();
-      
       Alert.alert("Отладка", "Микрофон получен. Создаю Offer...");
-      
       const offer = await peerConnection.current.createOffer();
       await peerConnection.current.setLocalDescription(offer);
-      
       ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { type: 'offer', signal: offer } }));
-      
       Alert.alert("Успех", "Сигнал звонка отправлен на сервер!");
     } catch (e) {
       Alert.alert("Ошибка звонка", e.message);
@@ -308,6 +303,7 @@ export default function App() {
     }
   };
 
+  // --- ЭКРАН НАСТРОЕК ---
   if (screen === 'settings') {
     return (
       <SafeAreaView style={styles.container}>
@@ -338,6 +334,7 @@ export default function App() {
     );
   }
 
+  // --- ЭКРАН КОМНАТЫ ---
   if (screen === 'room') {
     return (
       <SafeAreaView style={styles.container}>
@@ -358,7 +355,6 @@ export default function App() {
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <SmoothButton style={styles.actionBtn} onPress={copyCode}><Ionicons name="copy-outline" size={16} color="#a1a1aa" /><Text style={styles.actionBtnText}>Копировать ID</Text></SmoothButton>
             <Animated.View style={{ transform: [{ scale: menuBtnAnim }] }}><SmoothButton style={styles.squareBtn} onPress={toggleCard}><Ionicons name="menu" size={24} color="#a1a1aa" /></SmoothButton></Animated.View>
-            
             <SmoothButton style={[styles.squareBtn, { backgroundColor: isInCall ? '#da373c' : '#1f3a29' }]} onPress={startCall}>
               <Ionicons name={isInCall ? "return-down-forward" : "call"} size={24} color="#fff" />
             </SmoothButton>
@@ -415,6 +411,7 @@ export default function App() {
     );
   }
 
+  // --- ЭКРАН ЗВОНКА ---
   if (screen === 'call') {
     return (
       <Animated.View style={[styles.container, { opacity: callScreenAnim, transform: [{ scale: callScreenAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] }]}>
@@ -443,66 +440,92 @@ export default function App() {
     );
   }
 
+  // --- ГЛАВНЫЙ ЭКРАН (С ВКЛАДКАМИ) ---
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Animatable.View animation="fadeIn" duration={800}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <MaterialCommunityIcons name="skull" size={32} color="#23a559" />
-              <Text style={styles.logoText}>voice yok</Text>
-            </View>
-            <SmoothButton style={styles.settingsBtn} onPress={() => { setScreen('settings'); if (vibrationEnabled) Vibration.vibrate(10); }}>
-              <Ionicons name="settings-outline" size={24} color="#a1a1aa" />
-            </SmoothButton>
-          </View>
+      {/* ВЕРХНЯЯ ПАНЕЛЬ */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <MaterialCommunityIcons name="skull" size={32} color="#23a559" />
+          <Text style={styles.logoText}>voice yok</Text>
+        </View>
+        <SmoothButton style={styles.settingsBtn} onPress={() => { setScreen('settings'); if (vibrationEnabled) Vibration.vibrate(10); }}>
+          <Ionicons name="settings-outline" size={24} color="#a1a1aa" />
+        </SmoothButton>
+      </View>
 
-          <View style={styles.headerBox}>
-            <View style={styles.badge}>
-              <View style={styles.badgeDot} />
-              <Text style={styles.badgeText}>ИГРОВЫЕ КОМНАТЫ • MESH</Text>
-            </View>
-            <Text style={styles.titleText}>Играйте и общайтесь{'\n'}локально.</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.label}>ВАШЕ ИМЯ</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#71717a" style={styles.inputIcon} />
-              <TextInput style={styles.input} placeholder="Ваш никнейм" placeholderTextColor="#71717a" value={name} onChangeText={setName} />
-            </View>
-            
-            <SmoothButton style={styles.primaryBtn} onPress={createRoom}>
-              <Text style={styles.primaryBtnText}>+ Создать комнату</Text>
-              <Ionicons name="arrow-forward" size={20} color="#fff" />
-            </SmoothButton>
-
-            <View style={styles.separator}>
-              <View style={styles.separatorLine} />
-              <Text style={styles.separatorText}>или войдите</Text>
-              <View style={styles.separatorLine} />
-            </View>
-
-            <Text style={styles.label}>ID КОМНАТЫ</Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={[styles.inputContainer, { flex: 1, marginBottom: 0 }]}>
-                <Ionicons name="key-outline" size={20} color="#71717a" style={styles.inputIcon} />
-                <TextInput style={styles.input} placeholder="Например, K4M8QZ" placeholderTextColor="#71717a" value={joinCode} onChangeText={setJoinCode} autoCapitalize="characters" />
+      {/* КОНТЕНТ ВКЛАДОК */}
+      <View style={{ flex: 1 }}>
+        {activeTab === 'chats' ? (
+          <ScrollView contentContainerStyle={styles.scrollContainer}>
+            <Animatable.View animation="fadeIn" duration={800}>
+              <View style={styles.headerBox}>
+                <View style={styles.badge}>
+                  <View style={styles.badgeDot} />
+                  <Text style={styles.badgeText}>ИГРОВЫЕ КОМНАТЫ • MESH</Text>
+                </View>
+                <Text style={styles.titleText}>Играйте и общайтесь{'\n'}локально.</Text>
               </View>
-              <SmoothButton style={styles.joinBtn} onPress={joinRoom}>
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
-              </SmoothButton>
-            </View>
+
+              <View style={styles.card}>
+                <Text style={styles.label}>ВАШЕ ИМЯ</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="person-outline" size={20} color="#71717a" style={styles.inputIcon} />
+                  <TextInput style={styles.input} placeholder="Ваш никнейм" placeholderTextColor="#71717a" value={name} onChangeText={setName} />
+                </View>
+                
+                <SmoothButton style={styles.primaryBtn} onPress={createRoom}>
+                  <Text style={styles.primaryBtnText}>+ Создать комнату</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </SmoothButton>
+
+                <View style={styles.separator}>
+                  <View style={styles.separatorLine} />
+                  <Text style={styles.separatorText}>или войдите</Text>
+                  <View style={styles.separatorLine} />
+                </View>
+
+                <Text style={styles.label}>ID КОМНАТЫ</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.inputContainer, { flex: 1, marginBottom: 0 }]}>
+                    <Ionicons name="key-outline" size={20} color="#71717a" style={styles.inputIcon} />
+                    <TextInput style={styles.input} placeholder="Например, K4M8QZ" placeholderTextColor="#71717a" value={joinCode} onChangeText={setJoinCode} autoCapitalize="characters" />
+                  </View>
+                  <SmoothButton style={styles.joinBtn} onPress={joinRoom}>
+                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  </SmoothButton>
+                </View>
+              </View>
+            </Animatable.View>
+          </ScrollView>
+        ) : (
+          <View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' }}>
+            <MaterialCommunityIcons name="gamepad-variant-outline" size={80} color="#27272a" />
+            <Text style={{ color: '#71717a', fontSize: 20, fontWeight: 'bold', marginTop: 20 }}>Игровая зона</Text>
+            <Text style={{ color: '#3f3f46', fontSize: 14, marginTop: 10, textAlign: 'center' }}>Здесь будут мини-игры и Mesh-сеть. Скоро...</Text>
           </View>
-        </Animatable.View>
-      </ScrollView>
+        )}
+      </View>
+
+      {/* НИЖНЯЯ ПАНЕЛЬ ВКЛАДОК */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('chats')}>
+          <Ionicons name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} size={26} color={activeTab === 'chats' ? "#5865F2" : "#71717a"} />
+          <Text style={[styles.tabText, activeTab === 'chats' && { color: '#5865F2' }]}>Чаты</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('games')}>
+          <Ionicons name={activeTab === 'games' ? "game-controller" : "game-controller-outline"} size={26} color={activeTab === 'games' ? "#5865F2" : "#71717a"} />
+          <Text style={[styles.tabText, activeTab === 'games' && { color: '#5865F2' }]}>Игровая зона</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
-  scrollContainer: { padding: 20, paddingTop: 60 },
+  scrollContainer: { padding: 20, paddingTop: 20 },
   logoText: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
   settingsBtn: { backgroundColor: '#18181b', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#27272a' },
   headerBox: { marginBottom: 30 },
@@ -540,8 +563,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#121214', borderBottomWidth: 1, borderBottomColor: '#27272a' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fafafa' },
   settingsCard: { backgroundColor: '#121214', borderRadius: 16, padding: 15, borderWidth: 1, borderColor: '#27272a', marginBottom: 15 },
-  connBtn: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#18181b', borderWidth: 1, borderColor: '#27272a', marginHorizontal: 2 },
-  connBtnActive: { backgroundColor: '#5865F2', borderColor: '#5865F2' },
   callGrid: { flex: 1, padding: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 15, justifyContent: 'center', alignContent: 'center' },
   callSquare: { backgroundColor: '#121214', borderWidth: 1, borderColor: '#5865F2', borderRadius: 24, padding: 20, width: '45%', aspectRatio: 1, justifyContent: 'space-between' },
   callSquareHeader: { width: '100%', zIndex: 2 },
@@ -556,4 +577,8 @@ const styles = StyleSheet.create({
   participantNameBig: { color: '#fafafa', fontSize: 18, fontWeight: 'bold' },
   ipBadge: { backgroundColor: '#0f2e2d', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   ipText: { color: '#23a559', fontSize: 12, fontWeight: 'bold' },
+  // Стили для нижней панели вкладок
+  tabBar: { flexDirection: 'row', backgroundColor: '#121214', borderTopWidth: 1, borderTopColor: '#27272a', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10 },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  tabText: { fontSize: 12, fontWeight: '600', color: '#71717a' },
 });
