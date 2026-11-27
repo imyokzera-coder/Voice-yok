@@ -43,8 +43,12 @@ const SmoothButton = ({ onPress, style, children, activeScale = 0.92 }) => {
 
 export default function App() {
   const [screen, setScreen] = useState('home');
-  const [activeTab, setActiveTab] = useState('chats'); // НОВОЕ: управление вкладками
-  const [name, setName] = useState('');
+  const [activeTab, setActiveTab] = useState('chats'); 
+  
+  // Данные пользователя
+  const [name, setName] = useState('Yokzera');
+  const [userCode, setUserCode] = useState('YOK123'); 
+  
   const [roomCode, setRoomCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [msg, setMsg] = useState('');
@@ -61,6 +65,12 @@ export default function App() {
 
   const [serverIp, setServerIp] = useState('192.168.0.101');
   const [tempIp, setTempIp] = useState('192.168.0.101');
+
+  // Список "Чатов" для дизайна
+  const [chatList, setChatList] = useState([
+    { id: 1, name: 'Общий чат', lastMsg: 'Привет всем!', time: '12:30' },
+    { id: 2, name: 'Игровая комната #1', lastMsg: 'Кто в лобби?', time: '11:20' },
+  ]);
 
   const recordTimer = useRef(null);
   const ws = useRef(null);
@@ -202,15 +212,14 @@ export default function App() {
     try {
       playClick();
       setIsInCall(true); setIsSpeaking(true); setScreen('call');
-      Alert.alert("Отладка", "Кнопка нажата. Запрашиваю микрофон...");
       await createPeerConnection();
-      Alert.alert("Отладка", "Микрофон получен. Создаю Offer...");
       const offer = await peerConnection.current.createOffer();
       await peerConnection.current.setLocalDescription(offer);
       ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { type: 'offer', signal: offer } }));
-      Alert.alert("Успех", "Сигнал звонка отправлен на сервер!");
     } catch (e) {
       Alert.alert("Ошибка звонка", e.message);
+      setIsInCall(false);
+      setScreen('room');
     }
   };
 
@@ -444,7 +453,7 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <MaterialCommunityIcons name="skull" size={32} color="#23a559" />
           <Text style={styles.logoText}>voice yok</Text>
@@ -456,67 +465,79 @@ export default function App() {
 
       {/* КОНТЕНТ ВКЛАДОК */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'chats' ? (
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            <Animatable.View animation="fadeIn" duration={800}>
-              <View style={styles.headerBox}>
-                <View style={styles.badge}>
-                  <View style={styles.badgeDot} />
-                  <Text style={styles.badgeText}>ИГРОВЫЕ КОМНАТЫ • MESH</Text>
-                </View>
-                <Text style={styles.titleText}>Играйте и общайтесь{'\n'}локально.</Text>
+        {activeTab === 'chats' && (
+          <View style={{ flex: 1 }}>
+            {/* ПОИСК */}
+            <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
+              <View style={styles.searchBar}>
+                <Ionicons name="search" size={20} color="#71717a" />
+                <TextInput style={styles.searchInput} placeholder="Поиск чатов..." placeholderTextColor="#71717a" />
               </View>
-
-              <View style={styles.card}>
-                <Text style={styles.label}>ВАШЕ ИМЯ</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="#71717a" style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="Ваш никнейм" placeholderTextColor="#71717a" value={name} onChangeText={setName} />
-                </View>
-                
-                <SmoothButton style={styles.primaryBtn} onPress={createRoom}>
-                  <Text style={styles.primaryBtnText}>+ Создать комнату</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#fff" />
-                </SmoothButton>
-
-                <View style={styles.separator}>
-                  <View style={styles.separatorLine} />
-                  <Text style={styles.separatorText}>или войдите</Text>
-                  <View style={styles.separatorLine} />
-                </View>
-
-                <Text style={styles.label}>ID КОМНАТЫ</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={[styles.inputContainer, { flex: 1, marginBottom: 0 }]}>
-                    <Ionicons name="key-outline" size={20} color="#71717a" style={styles.inputIcon} />
-                    <TextInput style={styles.input} placeholder="Например, K4M8QZ" placeholderTextColor="#71717a" value={joinCode} onChangeText={setJoinCode} autoCapitalize="characters" />
+            </View>
+            {/* СПИСОК ЧАТОВ */}
+            <ScrollView>
+              {chatList.map((item) => (
+                <TouchableOpacity key={item.id} style={styles.chatItem} onPress={createRoom}>
+                  <View style={styles.chatAvatar}>
+                    <Text style={styles.chatAvatarText}>{item.name[0]}</Text>
                   </View>
-                  <SmoothButton style={styles.joinBtn} onPress={joinRoom}>
-                    <Ionicons name="arrow-forward" size={20} color="#fff" />
-                  </SmoothButton>
-                </View>
-              </View>
-            </Animatable.View>
-          </ScrollView>
-        ) : (
-          <View style={{ flex: 1, padding: 20, justifyContent: 'center', alignItems: 'center' }}>
-            <MaterialCommunityIcons name="gamepad-variant-outline" size={80} color="#27272a" />
-            <Text style={{ color: '#71717a', fontSize: 20, fontWeight: 'bold', marginTop: 20 }}>Игровая зона</Text>
-            <Text style={{ color: '#3f3f46', fontSize: 14, marginTop: 10, textAlign: 'center' }}>Здесь будут мини-игры и Mesh-сеть. Скоро...</Text>
+                  <View style={styles.chatInfo}>
+                    <View style={styles.chatRow}>
+                      <Text style={styles.chatName}>{item.name}</Text>
+                      <Text style={styles.chatTime}>{item.time}</Text>
+                    </View>
+                    <Text style={styles.chatLastMsg} numberOfLines={1}>{item.lastMsg}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
+        )}
+
+        {activeTab === 'games' && (
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <Text style={{ color: '#fafafa', fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>Игровая зона</Text>
+            <View style={styles.gameCard}>
+              <MaterialCommunityIcons name="account-group" size={40} color="#5865F2" />
+              <Text style={styles.gameTitle}>Онлайн друзья</Text>
+              <Text style={styles.gameSubtitle}>Никого нет в сети</Text>
+              <SmoothButton style={styles.primaryBtn} onPress={createRoom}>
+                <Text style={styles.primaryBtnText}>Создать лобби</Text>
+                <Ionicons name="add" size={20} color="#fff" />
+              </SmoothButton>
+            </View>
+          </ScrollView>
+        )}
+
+        {activeTab === 'profile' && (
+          <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center' }}>
+            <View style={styles.profileAvatar}>
+              <Text style={{ fontSize: 40, color: '#fff', fontWeight: 'bold' }}>{name[0].toUpperCase()}</Text>
+            </View>
+            <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 15 }}>{name}</Text>
+            <View style={styles.codeBadge}>
+              <Text style={{ color: '#23a559', fontSize: 16, fontWeight: 'bold' }}>ID: {userCode}</Text>
+            </View>
+            <Text style={{ color: '#71717a', marginTop: 10 }}>Ваш уникальный код для друзей</Text>
+          </ScrollView>
         )}
       </View>
 
       {/* НИЖНЯЯ ПАНЕЛЬ ВКЛАДОК */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('chats')}>
-          <Ionicons name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} size={26} color={activeTab === 'chats' ? "#5865F2" : "#71717a"} />
+          <Ionicons name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} size={24} color={activeTab === 'chats' ? "#5865F2" : "#71717a"} />
           <Text style={[styles.tabText, activeTab === 'chats' && { color: '#5865F2' }]}>Чаты</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('games')}>
-          <Ionicons name={activeTab === 'games' ? "game-controller" : "game-controller-outline"} size={26} color={activeTab === 'games' ? "#5865F2" : "#71717a"} />
-          <Text style={[styles.tabText, activeTab === 'games' && { color: '#5865F2' }]}>Игровая зона</Text>
+          <Ionicons name={activeTab === 'games' ? "game-controller" : "game-controller-outline"} size={24} color={activeTab === 'games' ? "#5865F2" : "#71717a"} />
+          <Text style={[styles.tabText, activeTab === 'games' && { color: '#5865F2' }]}>Игры</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('profile')}>
+          <Ionicons name={activeTab === 'profile' ? "person" : "person-outline"} size={24} color={activeTab === 'profile' ? "#5865F2" : "#71717a"} />
+          <Text style={[styles.tabText, activeTab === 'profile' && { color: '#5865F2' }]}>Профиль</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -577,8 +598,30 @@ const styles = StyleSheet.create({
   participantNameBig: { color: '#fafafa', fontSize: 18, fontWeight: 'bold' },
   ipBadge: { backgroundColor: '#0f2e2d', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   ipText: { color: '#23a559', fontSize: 12, fontWeight: 'bold' },
-  // Стили для нижней панели вкладок
+  
+  // НОВЫЕ СТИЛИ ДЛЯ ВКЛАДОК
   tabBar: { flexDirection: 'row', backgroundColor: '#121214', borderTopWidth: 1, borderTopColor: '#27272a', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10 },
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
   tabText: { fontSize: 12, fontWeight: '600', color: '#71717a' },
+  
+  // СТИЛИ ДЛЯ ЧАТОВ
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#121214', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 10, borderWidth: 1, borderColor: '#27272a' },
+  searchInput: { flex: 1, color: '#fff', marginLeft: 10, fontSize: 16 },
+  chatItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#18181b' },
+  chatAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3b2d5c', justifyContent: 'center', alignItems: 'center' },
+  chatAvatarText: { color: '#d4b8ff', fontSize: 20, fontWeight: 'bold' },
+  chatInfo: { flex: 1, marginLeft: 15, justifyContent: 'center' },
+  chatRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  chatName: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  chatTime: { color: '#71717a', fontSize: 12 },
+  chatLastMsg: { color: '#a1a1aa', fontSize: 14 },
+  
+  // СТИЛИ ДЛЯ ИГРОВОЙ ЗОНЫ
+  gameCard: { backgroundColor: '#121214', borderRadius: 20, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#27272a' },
+  gameTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginTop: 10 },
+  gameSubtitle: { color: '#71717a', marginBottom: 20 },
+  
+  // СТИЛИ ДЛЯ ПРОФИЛЯ
+  profileAvatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#3b2d5c', justifyContent: 'center', alignItems: 'center', marginTop: 40 },
+  codeBadge: { backgroundColor: '#0f2e2d', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 15 },
 });
