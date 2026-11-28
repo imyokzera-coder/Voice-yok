@@ -1,26 +1,64 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TextInput, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform, Clipboard, Alert, Animated, TouchableWithoutFeedback, Easing, TouchableOpacity, Vibration, Switch } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  SafeAreaView,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Clipboard,
+  Alert,
+  Animated,
+  TouchableWithoutFeedback,
+  Easing,
+  TouchableOpacity,
+  Vibration,
+  Switch,
+  Image,
+  Modal,
+  FlatList,
+  Dimensions,
+} from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer } from 'expo-audio';
 import { RTCPeerConnection, RTCView, mediaDevices, RTCIceCandidate, RTCSessionDescription } from 'react-native-webrtc';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width } = Dimensions.get('window');
 const CLICK_SOUND = require('./assets/click.mp3');
+
+// ====================== АВАТАРКИ-ЗАГЛУШКИ ======================
+const AVATAR_STUBS = [
+  'https://api.dicebear.com/7.x/avataaars/png?seed=Skull1&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/avataaars/png?seed=Skull2&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/avataaars/png?seed=Skull3&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/bottts/png?seed=Robot1&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/bottts/png?seed=Robot2&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/pixel-art/png?seed=Pixel1&backgroundColor=09090b',
+  'https://api.dicebear.com/7.x/pixel-art/png?seed=Pixel2&backgroundColor=09090b',
+  'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+];
 
 const PulseIcon = ({ active, color, isMuted }) => {
   const scale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (active) {
-      Animated.loop(Animated.sequence([
-        Animated.timing(scale, { toValue: 1.3, duration: 600, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 1, duration: 600, useNativeDriver: true })
-      ])).start();
-    } else { scale.setValue(1); }
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scale, { toValue: 1.3, duration: 600, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      scale.setValue(1);
+    }
   }, [active]);
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={color} />
+      <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={24} color={color} />
     </Animated.View>
   );
 };
@@ -31,7 +69,8 @@ const SmoothButton = ({ onPress, style, children, activeScale = 0.92 }) => {
     Vibration.vibrate(10);
     Animated.spring(scaleValue, { toValue: activeScale, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
   };
-  const handlePressOut = () => Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }).start();
+  const handlePressOut = () =>
+    Animated.spring(scaleValue, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }).start();
   return (
     <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
       <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress}>
@@ -43,17 +82,19 @@ const SmoothButton = ({ onPress, style, children, activeScale = 0.92 }) => {
 
 export default function App() {
   const [screen, setScreen] = useState('home');
-  const [activeTab, setActiveTab] = useState('chats'); 
-  
-  // Данные пользователя
+  const [activeTab, setActiveTab] = useState('chats');
+
+  // Профиль
   const [name, setName] = useState('Yokzera');
-  const [userCode, setUserCode] = useState('YOK123'); 
-  
+  const [userCode, setUserCode] = useState('');
+  const [avatar, setAvatar] = useState(AVATAR_STUBS[0]);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+
+  // Комната / чат
   const [roomCode, setRoomCode] = useState('');
-  const [joinCode, setJoinCode] = useState('');
   const [msg, setMsg] = useState('');
   const [chat, setChat] = useState([]);
-  const [myLocalIp, setMyLocalIp] = useState('192.168.0.101'); 
+  const [myLocalIp, setMyLocalIp] = useState('192.168.0.101');
   const [isInCall, setIsInCall] = useState(false);
   const [myMicOn, setMyMicOn] = useState(true);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -63,16 +104,22 @@ export default function App() {
   const [recordDuration, setRecordDuration] = useState(0);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
+  // Сервер
   const [serverIp, setServerIp] = useState('192.168.0.101');
   const [tempIp, setTempIp] = useState('192.168.0.101');
 
-  // Список "Чатов" для дизайна
-  const [chatList, setChatList] = useState([
-    { id: 1, name: 'Общий чат', lastMsg: 'Привет всем!', time: '12:30' },
-    { id: 2, name: 'Игровая комната #1', lastMsg: 'Кто в лобби?', time: '11:20' },
+  // Контакты
+  const [contacts, setContacts] = useState([]);
+  const [searchId, setSearchId] = useState('');
+
+  // Игровые лобби
+  const [gameLobbies, setGameLobbies] = useState([
+    { id: 'LOBBY-DEMO1', title: 'Deathmatch Arena', ip: '192.168.1.50', players: 3, max: 8 },
+    { id: 'LOBBY-DEMO2', title: 'Survival Zone', ip: '192.168.1.77', players: 1, max: 4 },
   ]);
 
   const recordTimer = useRef(null);
+  const callTimer = useRef(null);
   const ws = useRef(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
@@ -87,31 +134,65 @@ export default function App() {
   const clickBusy = useRef(false);
   const lastClickAt = useRef(0);
 
+  // ====================== ИНИЦИАЛИЗАЦИЯ ======================
   useEffect(() => {
-    const loadIp = async () => {
+    (async () => {
       try {
+        // Загружаем IP
         const savedIp = await AsyncStorage.getItem('@voiceyok_ip');
         if (savedIp) {
           setServerIp(savedIp);
           setTempIp(savedIp);
           setMyLocalIp(savedIp);
         }
-      } catch (e) {}
-    };
-    loadIp();
+
+        // Загружаем / генерируем уникальный ID
+        let storedCode = await AsyncStorage.getItem('@voiceyok_usercode');
+        if (!storedCode) {
+          storedCode = 'YOK' + Math.random().toString(36).substring(2, 7).toUpperCase();
+          await AsyncStorage.setItem('@voiceyok_usercode', storedCode);
+        }
+        setUserCode(storedCode);
+
+        // Загружаем имя и аватар
+        const savedName = await AsyncStorage.getItem('@voiceyok_name');
+        if (savedName) setName(savedName);
+
+        const savedAvatar = await AsyncStorage.getItem('@voiceyok_avatar');
+        if (savedAvatar) setAvatar(savedAvatar);
+
+        // Загружаем контакты
+        const savedContacts = await AsyncStorage.getItem('@voiceyok_contacts');
+        if (savedContacts) setContacts(JSON.parse(savedContacts));
+      } catch (e) {
+        console.log('Init error', e);
+      }
+    })();
   }, []);
+
+  // Таймер звонка
+  useEffect(() => {
+    if (isInCall) {
+      callTimer.current = setInterval(() => setCallDuration((p) => p + 1), 1000);
+    } else {
+      clearInterval(callTimer.current);
+      setCallDuration(0);
+    }
+    return () => clearInterval(callTimer.current);
+  }, [isInCall]);
 
   const saveNewIp = async () => {
     try {
       await AsyncStorage.setItem('@voiceyok_ip', tempIp);
       setServerIp(tempIp);
       setMyLocalIp(tempIp);
-      Alert.alert("Успех", "IP сохранен: " + tempIp);
+      Alert.alert('Успех', 'IP сохранён: ' + tempIp);
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось сохранить IP");
+      Alert.alert('Ошибка', 'Не удалось сохранить IP');
     }
   };
 
+  // Звук клика
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -129,7 +210,9 @@ export default function App() {
         }, 200);
       } catch (e) {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const playClick = useCallback(() => {
@@ -138,40 +221,35 @@ export default function App() {
     if (now - lastClickAt.current < 40 || clickBusy.current) return;
     lastClickAt.current = now;
     clickBusy.current = true;
-    try { clickPlayer.seekTo(0); clickPlayer.play(); } catch (e) {}
-    setTimeout(() => { clickBusy.current = false; }, 80);
+    try {
+      clickPlayer.seekTo(0);
+      clickPlayer.play();
+    } catch (e) {}
+    setTimeout(() => {
+      clickBusy.current = false;
+    }, 80);
   }, [isRecording]);
 
-  const formatTime = (sec) => `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;
+  const formatTime = (sec) =>
+    `${Math.floor(sec / 60)
+      .toString()
+      .padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
 
-  useEffect(() => {
-    if (isInCall) {
-      const interval = setInterval(() => setCallDuration(prev => prev + 1), 1000);
-      return () => clearInterval(interval);
-    } else { setCallDuration(0); }
-  }, [isInCall]);
-
+  // ====================== WEBSOCKET + WEBRTC ======================
   useEffect(() => {
     if (screen === 'room' && roomCode) {
       ws.current = new WebSocket(`ws://${serverIp}:3000`);
-
-      ws.current.onopen = () => {
+      ws.current.onopen = () =>
         ws.current.send(JSON.stringify({ action: 'join', room: roomCode, user: name || 'Гость' }));
-      };
-
       ws.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.action === 'message') {
-          setChat((prev) => [...prev, { id: Date.now(), ...data.payload }]);
-        } else if (data.action === 'signal') {
-          handleSignal(data.payload);
-        }
+        try {
+          const data = JSON.parse(event.data);
+          if (data.action === 'message') setChat((prev) => [...prev, { id: Date.now(), ...data.payload }]);
+          else if (data.action === 'signal') handleSignal(data.payload);
+        } catch (e) {}
       };
-
-      ws.current.onerror = (e) => {
-         Alert.alert("Ошибка WebSocket", e.message || "Не удалось подключиться к " + serverIp);
-      };
-
+      ws.current.onerror = (e) =>
+        Alert.alert('Ошибка WebSocket', e.message || 'Не удалось подключиться к ' + serverIp);
       return () => {
         if (ws.current) ws.current.close();
         if (peerConnection.current) peerConnection.current.close();
@@ -198,26 +276,29 @@ export default function App() {
       const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
       localStream.current = stream;
       peerConnection.current = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-      stream.getTracks().forEach(track => peerConnection.current.addTrack(track, stream));
-      peerConnection.current.onicecandidate = (event) => { 
-        if (event.candidate && ws.current) {
-          ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { candidate: event.candidate } })); 
-        }
+      stream.getTracks().forEach((track) => peerConnection.current.addTrack(track, stream));
+      peerConnection.current.onicecandidate = (event) => {
+        if (event.candidate && ws.current)
+          ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { candidate: event.candidate } }));
       };
       peerConnection.current.ontrack = (event) => setRemoteStream(event.streams[0]);
-    } catch (e) { throw new Error("Микрофон недоступен: " + e.message); }
+    } catch (e) {
+      throw new Error('Микрофон недоступен: ' + e.message);
+    }
   };
 
   const startCall = async () => {
     try {
       playClick();
-      setIsInCall(true); setIsSpeaking(true); setScreen('call');
+      setIsInCall(true);
+      setIsSpeaking(true);
+      setScreen('call');
       await createPeerConnection();
       const offer = await peerConnection.current.createOffer();
       await peerConnection.current.setLocalDescription(offer);
       ws.current.send(JSON.stringify({ action: 'signal', room: roomCode, payload: { type: 'offer', signal: offer } }));
     } catch (e) {
-      Alert.alert("Ошибка звонка", e.message);
+      Alert.alert('Ошибка звонка', e.message);
       setIsInCall(false);
       setScreen('room');
     }
@@ -225,131 +306,239 @@ export default function App() {
 
   const endCall = () => {
     playClick();
-    if (peerConnection.current) { peerConnection.current.close(); peerConnection.current = null; }
-    if (localStream.current) { localStream.current.getTracks().forEach(t => t.stop()); localStream.current = null; }
-    setRemoteStream(null); setIsInCall(false); setIsSpeaking(false); setScreen('room');
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+    if (localStream.current) {
+      localStream.current.getTracks().forEach((t) => t.stop());
+      localStream.current = null;
+    }
+    setRemoteStream(null);
+    setIsInCall(false);
+    setIsSpeaking(false);
+    setScreen('room');
   };
 
   const requestPermission = async () => {
     const status = await AudioModule.requestRecordingPermissionsAsync();
-    if (!status.granted) { Alert.alert("Ошибка", "Нет доступа к микрофону"); return false; }
+    if (!status.granted) {
+      Alert.alert('Ошибка', 'Нет доступа к микрофону');
+      return false;
+    }
     return true;
   };
 
   const toggleCard = () => {
     playClick();
-    Animated.sequence([Animated.timing(menuBtnAnim, { toValue: 1.2, duration: 100, useNativeDriver: true }), Animated.spring(menuBtnAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true })]).start();
-    Animated.timing(cardAnim, { toValue: cardAnim._value === 0 ? 1 : 0, duration: 400, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start();
+    Animated.sequence([
+      Animated.timing(menuBtnAnim, { toValue: 1.2, duration: 100, useNativeDriver: true }),
+      Animated.spring(menuBtnAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }),
+    ]).start();
+    Animated.timing(cardAnim, {
+      toValue: cardAnim._value === 0 ? 1 : 0,
+      duration: 400,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
 
   const collapseCall = () => {
-    Animated.timing(callScreenAnim, { toValue: 0, duration: 300, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(() => { setScreen('room'); callScreenAnim.setValue(1); });
+    Animated.timing(callScreenAnim, {
+      toValue: 0,
+      duration: 300,
+      easing: Easing.in(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setScreen('room');
+      callScreenAnim.setValue(1);
+    });
   };
 
+  // ====================== ГОЛОСОВЫЕ ======================
   const handlePressIn = async () => {
     if (vibrationEnabled) Vibration.vibrate(10);
     const hasPermission = await requestPermission();
     if (!hasPermission) return;
-
-    clearInterval(recordTimer.current); 
-    setRecordDuration(0);               
-    try { await audioRecorder.stop(); } catch (e) {} 
-
+    clearInterval(recordTimer.current);
+    setRecordDuration(0);
+    try {
+      await audioRecorder.stop();
+    } catch (e) {}
     await AudioModule.setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-    await audioRecorder.prepareToRecordAsync(); 
+    await audioRecorder.prepareToRecordAsync();
     audioRecorder.record();
-    setIsRecording(true); 
-    recordTimer.current = setInterval(() => setRecordDuration(prev => prev + 1), 1000);
+    setIsRecording(true);
+    recordTimer.current = setInterval(() => setRecordDuration((prev) => prev + 1), 1000);
   };
 
   const handlePressOut = async () => {
-    if (!isRecording) return; 
+    if (!isRecording) return;
     playClick();
-    clearInterval(recordTimer.current); 
-    try { await audioRecorder.stop(); } catch (e) {}
-    const duration = recordDuration; 
-    setIsRecording(false); setRecordDuration(0);
+    clearInterval(recordTimer.current);
+    try {
+      await audioRecorder.stop();
+    } catch (e) {}
+    const duration = recordDuration;
+    setIsRecording(false);
+    setRecordDuration(0);
     if (duration > 0) {
-      const voiceMsg = { user: name || 'Вы', text: `[Голосовое ${formatTime(duration)}]`, isVoice: true, uri: audioRecorder.uri };
+      const voiceMsg = {
+        user: name || 'Вы',
+        text: `[Голосовое ${formatTime(duration)}]`,
+        isVoice: true,
+        uri: audioRecorder.uri,
+      };
       if (ws.current) ws.current.send(JSON.stringify({ action: 'message', room: roomCode, payload: voiceMsg }));
-      setChat([...chat, { id: Date.now(), ...voiceMsg }]); 
+      setChat((prev) => [...prev, { id: Date.now(), ...voiceMsg }]);
     }
   };
 
-  const playVoice = async (uri) => { try { await player.replace({ uri }); await player.play(); } catch (e) {} };
-  
-  const testMicrophone = async () => {
-    const hasPermission = await requestPermission(); if (!hasPermission) return;
-    await AudioModule.setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-    Alert.alert("Микрофон", "Запись 3 секунды..."); await audioRecorder.prepareToRecordAsync(); audioRecorder.record();
-    setTimeout(async () => {
-      await audioRecorder.stop(); Alert.alert("Успех", "Сейчас вы услышите свой голос.");
-      try { await player.replace({ uri: audioRecorder.uri }); await player.play(); } catch (e) {}
-    }, 3000);
+  const playVoice = async (uri) => {
+    try {
+      await player.replace({ uri });
+      await player.play();
+    } catch (e) {}
   };
 
-  const createRoom = () => { 
+  // ====================== КОМНАТЫ / ЛОББИ ======================
+  const createRoom = (isLobby = false) => {
     playClick();
-    setRoomCode(Math.random().toString(36).substring(2, 8).toUpperCase()); 
-    setScreen('room'); 
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    setRoomCode(code);
+    setChat([]);
+    if (isLobby) {
+      const newLobby = {
+        id: code,
+        title: `Лобби ${code}`,
+        ip: myLocalIp,
+        players: 1,
+        max: 8,
+      };
+      setGameLobbies((prev) => [newLobby, ...prev]);
+    }
+    setScreen('room');
   };
-  
-  const joinRoom = () => { 
+
+  const joinRoom = (code) => {
     playClick();
-    if (joinCode.trim().length > 2) { setRoomCode(joinCode.toUpperCase()); setScreen('room'); } 
-    else Alert.alert("Ошибка", "Введите ID"); 
+    if (code && code.length > 2) {
+      setRoomCode(code.toUpperCase());
+      setChat([]);
+      setScreen('room');
+    } else Alert.alert('Ошибка', 'Введите ID');
   };
-  
-  const copyCode = () => { playClick(); Clipboard.setString(roomCode); Alert.alert("Успех", "Код скопирован!"); };
-  
+
+  const copyCode = () => {
+    playClick();
+    Clipboard.setString(roomCode);
+    Alert.alert('Успех', 'Код скопирован!');
+  };
+
   const sendMsg = () => {
     playClick();
     if (msg.trim() && ws.current) {
       const messageData = { user: name || 'Вы', text: msg, isVoice: false };
       ws.current.send(JSON.stringify({ action: 'message', room: roomCode, payload: messageData }));
-      setChat([...chat, { id: Date.now(), ...messageData }]); 
+      setChat((prev) => [...prev, { id: Date.now(), ...messageData }]);
       setMsg('');
     }
   };
 
-  // --- ЭКРАН НАСТРОЕК ---
+  // ====================== КОНТАКТЫ ======================
+  const searchAndAddContact = async () => {
+    playClick();
+    if (!searchId.trim()) return Alert.alert('Ошибка', 'Введите ID');
+    const id = searchId.trim().toUpperCase();
+    if (contacts.some((c) => c.code === id)) {
+      return Alert.alert('Уже есть', 'Этот контакт уже добавлен');
+    }
+    const newContact = {
+      id: Date.now(),
+      code: id,
+      name: id,
+      lastMsg: 'Контакт добавлен',
+      time: 'Сейчас',
+      online: Math.random() > 0.4,
+    };
+    const updated = [newContact, ...contacts];
+    setContacts(updated);
+    await AsyncStorage.setItem('@voiceyok_contacts', JSON.stringify(updated));
+    setSearchId('');
+    Alert.alert('Успех', `Контакт ${id} добавлен!`);
+  };
+
+  // ====================== АВАТАР ======================
+  const changeAvatar = async (url) => {
+    playClick();
+    setAvatar(url);
+    await AsyncStorage.setItem('@voiceyok_avatar', url);
+    setShowAvatarPicker(false);
+  };
+
+  // ====================== ЭКРАН НАСТРОЕК ======================
   if (screen === 'settings') {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}><Text style={styles.headerTitle}>Настройки</Text><SmoothButton onPress={() => setScreen('home')} style={{ padding: 5 }}><Ionicons name="close" size={28} color="#da373c" /></SmoothButton></View>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Настройки</Text>
+          <SmoothButton onPress={() => setScreen('home')} style={{ padding: 5 }}>
+            <Ionicons name="close" size={28} color="#da373c" />
+          </SmoothButton>
+        </View>
         <ScrollView style={{ padding: 20 }}>
-          <Text style={styles.label}>МИКРОФОН</Text>
-          <View style={styles.settingsCard}><Text style={{ color: '#fff', marginBottom: 10 }}>Проверка микрофона</Text><SmoothButton style={styles.primaryBtn} onPress={testMicrophone}><Text style={styles.primaryBtnText}>Записать и прослушать</Text></SmoothButton></View>
-          
-          <Text style={styles.label}>ИНТЕРФЕЙС</Text>
+          <Text style={styles.sectionTitle}>АККАУНТ</Text>
           <View style={styles.settingsCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: '#fff' }}>Вибрация</Text>
-              <Switch value={vibrationEnabled} onValueChange={setVibrationEnabled} trackColor={{ true: '#5865F2' }} />
-            </View>
+            <TouchableOpacity style={styles.settingsItem}>
+              <Text style={styles.settingsText}>Привязать аккаунт (скоро)</Text>
+              <Ionicons name="chevron-forward" size={20} color="#71717a" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingsItem}>
+              <Text style={styles.settingsText}>Чёрный список</Text>
+              <Ionicons name="chevron-forward" size={20} color="#71717a" />
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>ТЕСТОВАЯ ФУНКЦИЯ: IP СЕРВЕРА</Text>
+          <Text style={styles.sectionTitle}>ТЕСТ: IP СЕРВЕРА</Text>
           <View style={styles.settingsCard}>
             <Text style={{ color: '#71717a', fontSize: 12, marginBottom: 10 }}>Текущий IP: {serverIp}</Text>
             <View style={styles.inputContainer}>
               <Ionicons name="server-outline" size={20} color="#71717a" style={styles.inputIcon} />
-              <TextInput style={styles.input} value={tempIp} onChangeText={setTempIp} placeholder="192.168.x.x" placeholderTextColor="#71717a" keyboardType="numbers-and-punctuation" />
+              <TextInput
+                style={styles.input}
+                value={tempIp}
+                onChangeText={setTempIp}
+                placeholder="192.168.x.x"
+                placeholderTextColor="#71717a"
+                keyboardType="numbers-and-punctuation"
+              />
             </View>
-            <SmoothButton style={styles.primaryBtn} onPress={saveNewIp}><Text style={styles.primaryBtnText}>Сохранить IP</Text></SmoothButton>
+            <SmoothButton style={styles.primaryBtn} onPress={saveNewIp}>
+              <Text style={styles.primaryBtnText}>Сохранить IP</Text>
+            </SmoothButton>
           </View>
         </ScrollView>
       </SafeAreaView>
     );
   }
 
-  // --- ЭКРАН КОМНАТЫ ---
+  // ====================== ЭКРАН КОМНАТЫ ======================
   if (screen === 'room') {
     return (
       <SafeAreaView style={styles.container}>
         {isRecording && (
           <View style={{ position: 'absolute', bottom: 85, right: 60, zIndex: 999 }}>
-            <View style={{ backgroundColor: '#da373c', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 30, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View
+              style={{
+                backgroundColor: '#da373c',
+                paddingHorizontal: 20,
+                paddingVertical: 8,
+                borderRadius: 30,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
               <Ionicons name="mic" size={16} color="#fff" />
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>{formatTime(recordDuration)}</Text>
             </View>
@@ -358,25 +547,76 @@ export default function App() {
 
         <View style={styles.roomHeaderCard}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Text style={styles.roomTitle}>Комната {roomCode}</Text><MaterialCommunityIcons name="skull" size={24} color="#23a559" /></View>
-            <SmoothButton style={styles.disconnectBtn} onPress={() => { if(ws.current) ws.current.close(); endCall(); setScreen('home'); }}><Ionicons name="log-out-outline" size={18} color="#fff" /><Text style={styles.disconnectText}>Выйти</Text></SmoothButton>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={styles.roomTitle}>Комната {roomCode}</Text>
+              <MaterialCommunityIcons name="skull" size={24} color="#23a559" />
+            </View>
+            <SmoothButton
+              style={styles.disconnectBtn}
+              onPress={() => {
+                if (ws.current) ws.current.close();
+                endCall();
+                setScreen('home');
+              }}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#fff" />
+              <Text style={styles.disconnectText}>Выйти</Text>
+            </SmoothButton>
           </View>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <SmoothButton style={styles.actionBtn} onPress={copyCode}><Ionicons name="copy-outline" size={16} color="#a1a1aa" /><Text style={styles.actionBtnText}>Копировать ID</Text></SmoothButton>
-            <Animated.View style={{ transform: [{ scale: menuBtnAnim }] }}><SmoothButton style={styles.squareBtn} onPress={toggleCard}><Ionicons name="menu" size={24} color="#a1a1aa" /></SmoothButton></Animated.View>
-            <SmoothButton style={[styles.squareBtn, { backgroundColor: isInCall ? '#da373c' : '#1f3a29' }]} onPress={startCall}>
-              <Ionicons name={isInCall ? "return-down-forward" : "call"} size={24} color="#fff" />
+            <SmoothButton style={styles.actionBtn} onPress={copyCode}>
+              <Ionicons name="copy-outline" size={16} color="#a1a1aa" />
+              <Text style={styles.actionBtnText}>Копировать ID</Text>
+            </SmoothButton>
+            <Animated.View style={{ transform: [{ scale: menuBtnAnim }] }}>
+              <SmoothButton style={styles.squareBtn} onPress={toggleCard}>
+                <Ionicons name="menu" size={24} color="#a1a1aa" />
+              </SmoothButton>
+            </Animated.View>
+            <SmoothButton
+              style={[styles.squareBtn, { backgroundColor: isInCall ? '#da373c' : '#1f3a29' }]}
+              onPress={startCall}
+            >
+              <Ionicons name={isInCall ? 'return-down-forward' : 'call'} size={24} color="#fff" />
             </SmoothButton>
           </View>
         </View>
 
-        <Animated.View style={{ marginHorizontal: 20, marginBottom: 10, opacity: cardAnim, transform: [{ scale: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.01, 1] }) }, { translateX: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [130, 0] }) }, { translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }] }}>
+        <Animated.View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 10,
+            opacity: cardAnim,
+            transform: [
+              { scale: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.01, 1] }) },
+              { translateX: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [130, 0] }) },
+              { translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) },
+            ],
+          }}
+        >
           <View style={styles.newParticipantCard}>
-            <View style={styles.avatarContainer}><View style={styles.avatarBig}><Text style={styles.avatarTextBig}>{name ? name[0].toUpperCase() : 'В'}</Text></View><View style={styles.onlineDot} /></View>
-            <View style={{ flex: 1, marginLeft: 15 }}><Text style={styles.participantNameBig}>{name || 'Вы'}</Text></View>
+            <View style={styles.avatarContainer}>
+              <Image source={{ uri: avatar }} style={{ width: 50, height: 50, borderRadius: 16 }} />
+              <View style={styles.onlineDot} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 15 }}>
+              <Text style={styles.participantNameBig}>{name || 'Вы'}</Text>
+            </View>
             <View style={{ alignItems: 'flex-end', gap: 10 }}>
-              <TouchableOpacity onPress={() => { Clipboard.setString(myLocalIp); Alert.alert("Успех", "IP скопирован"); }}><View style={styles.ipBadge}><Text style={styles.ipText}>{myLocalIp}</Text></View></TouchableOpacity>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><MaterialCommunityIcons name="skull" size={16} color="#23a559" /><Text style={{ color: '#23a559', fontWeight: 'bold', fontSize: 12 }}>12 ms</Text></View>
+              <TouchableOpacity
+                onPress={() => {
+                  Clipboard.setString(myLocalIp);
+                  Alert.alert('Успех', 'IP скопирован');
+                }}
+              >
+                <View style={styles.ipBadge}>
+                  <Text style={styles.ipText}>{myLocalIp}</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <MaterialCommunityIcons name="skull" size={16} color="#23a559" />
+                <Text style={{ color: '#23a559', fontWeight: 'bold', fontSize: 12 }}>12 ms</Text>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -389,11 +629,23 @@ export default function App() {
                 <View style={styles.msgBubble}>
                   <Text style={styles.msgAuthor}>{m.user}</Text>
                   {m.isVoice ? (
-                    <TouchableOpacity onPress={() => playVoice(m.uri)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ backgroundColor: '#5865F2', padding: 8, borderRadius: 20 }}><Ionicons name="play" size={16} color="#fff" /></View>
-                      <View style={{ flex: 1 }}><Text style={styles.msgText}>Голосовое сообщение</Text><Text style={{ color: '#71717a', fontSize: 10 }}>{m.text.match(/\[Голосовое (.*)\]/)?.[1] || '00:00'}</Text></View>
+                    <TouchableOpacity
+                      onPress={() => playVoice(m.uri)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                    >
+                      <View style={{ backgroundColor: '#5865F2', padding: 8, borderRadius: 20 }}>
+                        <Ionicons name="play" size={16} color="#fff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.msgText}>Голосовое сообщение</Text>
+                        <Text style={{ color: '#71717a', fontSize: 10 }}>
+                          {m.text.match(/\[Голосовое (.*)\]/)?.[1] || '00:00'}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
-                  ) : (<Text style={styles.msgText}>{m.text}</Text>)}
+                  ) : (
+                    <Text style={styles.msgText}>{m.text}</Text>
+                  )}
                 </View>
               </Animatable.View>
             ))}
@@ -402,226 +654,703 @@ export default function App() {
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.bottomBar}>
-            <TextInput style={styles.chatInput} placeholder="Сообщение..." placeholderTextColor="#71717a" value={msg} onChangeText={setMsg} />
-            
-            <TouchableOpacity 
-              onPressIn={() => { if (!isRecording) handlePressIn(); }} 
-              onPressOut={() => { if (isRecording) handlePressOut(); }} 
-              activeOpacity={0.7} 
+            <TextInput
+              style={styles.chatInput}
+              placeholder="Сообщение..."
+              placeholderTextColor="#71717a"
+              value={msg}
+              onChangeText={setMsg}
+            />
+            <TouchableOpacity
+              onPressIn={() => {
+                if (!isRecording) handlePressIn();
+              }}
+              onPressOut={() => {
+                if (isRecording) handlePressOut();
+              }}
+              activeOpacity={0.7}
               style={[styles.micBtnSmall, isRecording && { backgroundColor: '#da373c' }]}
             >
-              <Ionicons name={isRecording ? "mic" : "mic-outline"} size={22} color={isRecording ? "#fff" : "#a1a1aa"} />
+              <Ionicons name={isRecording ? 'mic' : 'mic-outline'} size={22} color={isRecording ? '#fff' : '#a1a1aa'} />
             </TouchableOpacity>
-
-            <SmoothButton style={styles.sendBtn} onPress={sendMsg}><Ionicons name="send" size={20} color="#fff" /></SmoothButton>
+            <SmoothButton style={styles.sendBtn} onPress={sendMsg}>
+              <Ionicons name="send" size={20} color="#fff" />
+            </SmoothButton>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
-  // --- ЭКРАН ЗВОНКА ---
+  // ====================== ЭКРАН ЗВОНКА ======================
   if (screen === 'call') {
     return (
-      <Animated.View style={[styles.container, { opacity: callScreenAnim, transform: [{ scale: callScreenAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] }]}>
-        <View style={styles.header}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Text style={styles.headerTitle}>Звонок</Text><Text style={{ color: '#23a559', fontWeight: 'bold' }}>{formatTime(callDuration)}</Text></View><SmoothButton onPress={collapseCall} style={{ padding: 5 }}><Ionicons name="chevron-down" size={32} color="#a1a1aa" /></SmoothButton></View>
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            opacity: callScreenAnim,
+            transform: [{ scale: callScreenAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
+          },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={styles.headerTitle}>Звонок</Text>
+            <Text style={{ color: '#23a559', fontWeight: 'bold' }}>{formatTime(callDuration)}</Text>
+          </View>
+          <SmoothButton onPress={collapseCall} style={{ padding: 5 }}>
+            <Ionicons name="chevron-down" size={32} color="#a1a1aa" />
+          </SmoothButton>
+        </View>
         <View style={styles.callGrid}>
           <View style={styles.callSquare}>
-             <View style={styles.callSquareHeader}><Text style={styles.callSquareName}>{name || 'Вы'}</Text><Text style={styles.callSquareIp}>{myLocalIp}</Text></View>
-             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><MaterialCommunityIcons name="skull" size={20} color="#23a559" /><Text style={{ color: '#23a559', fontWeight: 'bold', fontSize: 12 }}>12 ms</Text></View>
-                <SmoothButton onPress={() => setMyMicOn(!myMicOn)} activeScale={0.8}>
-                  <PulseIcon active={myMicOn && isSpeaking} color={myMicOn ? "#23a559" : "#da373c"} isMuted={!myMicOn} />
-                </SmoothButton>
-             </View>
+            <View style={styles.callSquareHeader}>
+              <Text style={styles.callSquareName}>{name || 'Вы'}</Text>
+              <Text style={styles.callSquareIp}>{myLocalIp}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <MaterialCommunityIcons name="skull" size={20} color="#23a559" />
+                <Text style={{ color: '#23a559', fontWeight: 'bold', fontSize: 12 }}>12 ms</Text>
+              </View>
+              <SmoothButton onPress={() => setMyMicOn(!myMicOn)} activeScale={0.8}>
+                <PulseIcon active={myMicOn && isSpeaking} color={myMicOn ? '#23a559' : '#da373c'} isMuted={!myMicOn} />
+              </SmoothButton>
+            </View>
           </View>
           <View style={[styles.callSquare, { borderColor: '#27272a' }]}>
-             <View style={styles.callSquareHeader}><Text style={styles.callSquareName}>Собеседник</Text><Text style={styles.callSquareIp}>{remoteStream ? 'Подключен' : 'Ожидание...'}</Text></View>
-             {remoteStream && <RTCView streamURL={remoteStream.toURL()} style={{ flex: 1, width: '100%' }} objectFit="cover" />}
-             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><MaterialCommunityIcons name="skull" size={20} color={remoteStream ? "#23a559" : "#f1c40f"} /><Text style={{ color: remoteStream ? "#23a559" : "#f1c40f", fontWeight: 'bold', fontSize: 12 }}>{remoteStream ? '12 ms' : '-- ms'}</Text></View>
-                <Ionicons name="mic" size={28} color="#3f3f46" />
-             </View>
+            <View style={styles.callSquareHeader}>
+              <Text style={styles.callSquareName}>Собеседник</Text>
+              <Text style={styles.callSquareIp}>{remoteStream ? 'Подключён' : 'Ожидание...'}</Text>
+            </View>
+            {remoteStream && (
+              <RTCView streamURL={remoteStream.toURL()} style={{ flex: 1, width: '100%' }} objectFit="cover" />
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <MaterialCommunityIcons name="skull" size={20} color={remoteStream ? '#23a559' : '#f1c40f'} />
+                <Text style={{ color: remoteStream ? '#23a559' : '#f1c40f', fontWeight: 'bold', fontSize: 12 }}>
+                  {remoteStream ? '12 ms' : '-- ms'}
+                </Text>
+              </View>
+              <Ionicons name="mic" size={28} color="#3f3f46" />
+            </View>
           </View>
         </View>
-        <View style={{ padding: 30, alignItems: 'center' }}><SmoothButton style={styles.endCallBtn} onPress={endCall}><Ionicons name="call" size={30} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} /></SmoothButton></View>
+        <View style={{ padding: 30, alignItems: 'center' }}>
+          <SmoothButton style={styles.endCallBtn} onPress={endCall}>
+            <Ionicons name="call" size={30} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+          </SmoothButton>
+        </View>
       </Animated.View>
     );
   }
 
-  // --- ГЛАВНЫЙ ЭКРАН (С ВКЛАДКАМИ) ---
+  // ====================== ГЛАВНЫЙ ЭКРАН ======================
   return (
     <SafeAreaView style={styles.container}>
       {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: 10,
+        }}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <MaterialCommunityIcons name="skull" size={32} color="#23a559" />
           <Text style={styles.logoText}>voice yok</Text>
         </View>
-        <SmoothButton style={styles.settingsBtn} onPress={() => { setScreen('settings'); if (vibrationEnabled) Vibration.vibrate(10); }}>
+        <SmoothButton
+          style={styles.settingsBtn}
+          onPress={() => {
+            setScreen('settings');
+            if (vibrationEnabled) Vibration.vibrate(10);
+          }}
+        >
           <Ionicons name="settings-outline" size={24} color="#a1a1aa" />
         </SmoothButton>
       </View>
 
       {/* КОНТЕНТ ВКЛАДОК */}
       <View style={{ flex: 1 }}>
+        {/* ========== ЧАТЫ ========== */}
         {activeTab === 'chats' && (
           <View style={{ flex: 1 }}>
-            {/* ПОИСК */}
-            <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
-              <View style={styles.searchBar}>
+            <View style={{ paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', gap: 10 }}>
+              <View style={[styles.searchBar, { flex: 1 }]}>
                 <Ionicons name="search" size={20} color="#71717a" />
-                <TextInput style={styles.searchInput} placeholder="Поиск чатов..." placeholderTextColor="#71717a" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Введите ID друга..."
+                  placeholderTextColor="#71717a"
+                  value={searchId}
+                  onChangeText={setSearchId}
+                  autoCapitalize="characters"
+                />
               </View>
+              <TouchableOpacity style={styles.addButton} onPress={searchAndAddContact}>
+                <Ionicons name="person-add" size={24} color="#fff" />
+              </TouchableOpacity>
             </View>
-            {/* СПИСОК ЧАТОВ */}
+
             <ScrollView>
-              {chatList.map((item) => (
-                <TouchableOpacity key={item.id} style={styles.chatItem} onPress={createRoom}>
-                  <View style={styles.chatAvatar}>
+              {contacts.length === 0 && (
+                <Text style={{ color: '#71717a', textAlign: 'center', marginTop: 50 }}>
+                  Нет контактов. Добавьте друга по ID.
+                </Text>
+              )}
+              {contacts.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.chatItem}
+                  onPress={() => Alert.alert('Скоро', 'Личные чаты будут позже')}
+                >
+                  <View style={[styles.chatAvatar, { backgroundColor: item.online ? '#1f3a29' : '#3b2d5c' }]}>
                     <Text style={styles.chatAvatarText}>{item.name[0]}</Text>
+                    {item.online && <View style={styles.onlineIndicator} />}
                   </View>
                   <View style={styles.chatInfo}>
                     <View style={styles.chatRow}>
                       <Text style={styles.chatName}>{item.name}</Text>
                       <Text style={styles.chatTime}>{item.time}</Text>
                     </View>
-                    <Text style={styles.chatLastMsg} numberOfLines={1}>{item.lastMsg}</Text>
+                    <Text style={styles.chatLastMsg} numberOfLines={1}>
+                      {item.lastMsg}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            {/* FAB создать группу/комнату */}
+            <TouchableOpacity style={styles.fab} onPress={() => createRoom(false)}>
+              <Ionicons name="add" size={30} color="#fff" />
+            </TouchableOpacity>
           </View>
         )}
 
+        {/* ========== ИГРОВАЯ ЗОНА ========== */}
         {activeTab === 'games' && (
           <ScrollView contentContainerStyle={{ padding: 20 }}>
             <Text style={{ color: '#fafafa', fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>Игровая зона</Text>
-            <View style={styles.gameCard}>
-              <MaterialCommunityIcons name="account-group" size={40} color="#5865F2" />
-              <Text style={styles.gameTitle}>Онлайн друзья</Text>
-              <Text style={styles.gameSubtitle}>Никого нет в сети</Text>
-              <SmoothButton style={styles.primaryBtn} onPress={createRoom}>
-                <Text style={styles.primaryBtnText}>Создать лобби</Text>
-                <Ionicons name="add" size={20} color="#fff" />
-              </SmoothButton>
-            </View>
+
+            <SmoothButton style={[styles.primaryBtn, { marginBottom: 20 }]} onPress={() => createRoom(true)}>
+              <Text style={styles.primaryBtnText}>+ Создать лобби</Text>
+              <Ionicons name="add" size={20} color="#fff" />
+            </SmoothButton>
+
+            {gameLobbies.length === 0 && (
+              <Text style={{ color: '#71717a', textAlign: 'center', marginTop: 50 }}>
+                Нет активных лобби. Создайте первое!
+              </Text>
+            )}
+            {gameLobbies.map((lobby) => (
+              <View key={lobby.id} style={styles.lobbyCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>{lobby.title}</Text>
+                  <Text style={{ color: '#23a559', fontSize: 12 }}>IP: {lobby.ip}</Text>
+                </View>
+                <Text style={{ color: '#71717a', marginTop: 5 }}>
+                  Игроков: {lobby.players}/{lobby.max}
+                </Text>
+                <SmoothButton
+                  style={[styles.primaryBtn, { marginTop: 15, backgroundColor: '#1f3a29' }]}
+                  onPress={() => joinRoom(lobby.id)}
+                >
+                  <Text style={styles.primaryBtnText}>Присоединиться</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </SmoothButton>
+              </View>
+            ))}
           </ScrollView>
         )}
 
+        {/* ========== ПРОФИЛЬ ========== */}
         {activeTab === 'profile' && (
           <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center' }}>
-            <View style={styles.profileAvatar}>
-              <Text style={{ fontSize: 40, color: '#fff', fontWeight: 'bold' }}>{name[0].toUpperCase()}</Text>
+            <TouchableOpacity onPress={() => setShowAvatarPicker(true)}>
+              <View style={styles.profileAvatar}>
+                <Image source={{ uri: avatar }} style={{ width: '100%', height: '100%', borderRadius: 60 }} />
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    backgroundColor: '#5865F2',
+                    padding: 5,
+                    borderRadius: 15,
+                  }}
+                >
+                  <Ionicons name="camera" size={20} color="#fff" />
+                </View>
+              </View>
+            </TouchableOpacity>
+            <Text style={{ color: '#fff', fontSize: 26, fontWeight: 'bold', marginTop: 15 }}>{name}</Text>
+            <Text style={{ color: '#71717a', fontSize: 14, marginTop: 5 }}>ID: {userCode}</Text>
+
+            <View style={{ width: '100%', marginTop: 30 }}>
+              <Text style={styles.sectionTitle}>НАСТРОЙКИ ПРОФИЛЯ</Text>
+              <View style={styles.settingsCard}>
+                <TouchableOpacity
+                  style={styles.settingsItem}
+                  onPress={() => {
+                    Alert.prompt
+                      ? Alert.prompt(
+                          'Изменить имя',
+                          'Введите новое имя',
+                          [
+                            { text: 'Отмена', style: 'cancel' },
+                            {
+                              text: 'Сохранить',
+                              onPress: async (text) => {
+                                if (text && text.trim()) {
+                                  setName(text.trim());
+                                  await AsyncStorage.setItem('@voiceyok_name', text.trim());
+                                }
+                              },
+                            },
+                          ],
+                          'plain-text',
+                          name
+                        )
+                      : Alert.alert('Скоро', 'Изменение имени будет в следующем обновлении');
+                  }}
+                >
+                  <Text style={styles.settingsText}>Изменить имя</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#71717a" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingsItem} onPress={() => setScreen('settings')}>
+                  <Text style={styles.settingsText}>Настройки сервера</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#71717a" />
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 15 }}>{name}</Text>
-            <View style={styles.codeBadge}>
-              <Text style={{ color: '#23a559', fontSize: 16, fontWeight: 'bold' }}>ID: {userCode}</Text>
-            </View>
-            <Text style={{ color: '#71717a', marginTop: 10 }}>Ваш уникальный код для друзей</Text>
           </ScrollView>
         )}
       </View>
+
+      {/* ПЛАВАЮЩАЯ КНОПКА ЗВОНКА */}
+      <TouchableOpacity
+        style={styles.floatingCallBtn}
+        onPress={() => {
+          if (roomCode) startCall();
+          else Alert.alert('Ошибка', 'Сначала создайте комнату или зайдите в лобби');
+        }}
+      >
+        <Ionicons name="call" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* НИЖНЯЯ ПАНЕЛЬ ВКЛАДОК */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('chats')}>
-          <Ionicons name={activeTab === 'chats' ? "chatbubbles" : "chatbubbles-outline"} size={24} color={activeTab === 'chats' ? "#5865F2" : "#71717a"} />
+          <Ionicons
+            name={activeTab === 'chats' ? 'chatbubbles' : 'chatbubbles-outline'}
+            size={24}
+            color={activeTab === 'chats' ? '#5865F2' : '#71717a'}
+          />
           <Text style={[styles.tabText, activeTab === 'chats' && { color: '#5865F2' }]}>Чаты</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('games')}>
-          <Ionicons name={activeTab === 'games' ? "game-controller" : "game-controller-outline"} size={24} color={activeTab === 'games' ? "#5865F2" : "#71717a"} />
+          <Ionicons
+            name={activeTab === 'games' ? 'game-controller' : 'game-controller-outline'}
+            size={24}
+            color={activeTab === 'games' ? '#5865F2' : '#71717a'}
+          />
           <Text style={[styles.tabText, activeTab === 'games' && { color: '#5865F2' }]}>Игры</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('profile')}>
-          <Ionicons name={activeTab === 'profile' ? "person" : "person-outline"} size={24} color={activeTab === 'profile' ? "#5865F2" : "#71717a"} />
+          <Ionicons
+            name={activeTab === 'profile' ? 'person' : 'person-outline'}
+            size={24}
+            color={activeTab === 'profile' ? '#5865F2' : '#71717a'}
+          />
           <Text style={[styles.tabText, activeTab === 'profile' && { color: '#5865F2' }]}>Профиль</Text>
         </TouchableOpacity>
       </View>
+
+      {/* МОДАЛКА ВЫБОРА АВАТАРКИ */}
+      <Modal visible={showAvatarPicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 15 }}>Выбери аватарку</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12 }}>
+              {AVATAR_STUBS.map((url, i) => (
+                <TouchableOpacity key={i} onPress={() => changeAvatar(url)}>
+                  <Image
+                    source={{ uri: url }}
+                    style={{
+                      width: 70,
+                      height: 70,
+                      borderRadius: 35,
+                      borderWidth: avatar === url ? 3 : 0,
+                      borderColor: '#23a559',
+                    }}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <SmoothButton
+              style={[styles.primaryBtn, { marginTop: 20, backgroundColor: '#da373c' }]}
+              onPress={() => setShowAvatarPicker(false)}
+            >
+              <Text style={styles.primaryBtnText}>Закрыть</Text>
+            </SmoothButton>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
-  scrollContainer: { padding: 20, paddingTop: 20 },
   logoText: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
-  settingsBtn: { backgroundColor: '#18181b', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#27272a' },
-  headerBox: { marginBottom: 30 },
-  badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#18181b', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: '#27272a' },
-  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#23a559', marginRight: 8 },
-  badgeText: { color: '#a1a1aa', fontSize: 12, fontWeight: 'bold' },
-  titleText: { fontSize: 34, fontWeight: 'bold', color: '#fafafa', marginBottom: 15, lineHeight: 40 },
-  card: { backgroundColor: '#121214', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#27272a' },
-  label: { color: '#71717a', fontSize: 12, fontWeight: '600', marginBottom: 8, marginLeft: 4, marginTop: 10 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#09090b', borderRadius: 16, borderWidth: 1, borderColor: '#27272a', paddingHorizontal: 15, marginBottom: 20 },
-  inputIcon: { marginRight: 10 },
-  input: { flex: 1, color: '#fafafa', paddingVertical: 16, fontSize: 16 },
-  primaryBtn: { flexDirection: 'row', backgroundColor: '#5865F2', borderRadius: 16, padding: 18, justifyContent: 'space-between', alignItems: 'center' },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  separator: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  separatorLine: { flex: 1, height: 1, backgroundColor: '#27272a' },
-  separatorText: { color: '#71717a', paddingHorizontal: 10, fontSize: 13 },
-  joinBtn: { backgroundColor: '#23a559', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 18, justifyContent: 'center', alignItems: 'center' },
-  roomHeaderCard: { backgroundColor: '#121214', margin: 20, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#27272a', zIndex: 10 },
+  settingsBtn: {
+    backgroundColor: '#18181b',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+
+  profileAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#3b2d5c',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  sectionTitle: {
+    color: '#71717a',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    marginLeft: 10,
+    marginTop: 20,
+  },
+  settingsCard: {
+    backgroundColor: '#121214',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272a',
+  },
+  settingsText: { color: '#fff', fontSize: 16 },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121214',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  searchInput: { flex: 1, color: '#fff', marginLeft: 10, fontSize: 16 },
+  addButton: {
+    backgroundColor: '#23a559',
+    width: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  chatItem: {
+    flexDirection: 'row',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#18181b',
+  },
+  chatAvatar: {
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  chatAvatarText: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#23a559',
+    borderWidth: 2,
+    borderColor: '#09090b',
+  },
+  chatInfo: { flex: 1, marginLeft: 15, justifyContent: 'center' },
+  chatRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  chatName: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
+  chatTime: { color: '#71717a', fontSize: 12 },
+  chatLastMsg: { color: '#a1a1aa', fontSize: 14 },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#5865F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+
+  lobbyCard: {
+    backgroundColor: '#121214',
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#121214',
+    borderTopWidth: 1,
+    borderTopColor: '#27272a',
+    paddingVertical: 10,
+    paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+  },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  tabText: { fontSize: 12, fontWeight: '600', color: '#71717a' },
+
+  floatingCallBtn: {
+    position: 'absolute',
+    right: -20,
+    top: '40%',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#23a559',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#121214',
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272a',
+  },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fafafa' },
+  roomHeaderCard: {
+    backgroundColor: '#121214',
+    margin: 20,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    zIndex: 10,
+  },
   roomTitle: { color: '#fafafa', fontSize: 20, fontWeight: 'bold' },
-  disconnectBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#da373c', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 5 },
+  disconnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#da373c',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 5,
+  },
   disconnectText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#18181b', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#27272a', gap: 8 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#18181b',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    gap: 8,
+  },
   actionBtnText: { color: '#a1a1aa', fontSize: 14, fontWeight: '600' },
-  squareBtn: { backgroundColor: '#18181b', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#27272a', justifyContent: 'center', alignItems: 'center' },
+  squareBtn: {
+    backgroundColor: '#18181b',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   chatContainer: { flex: 1, paddingHorizontal: 20, justifyContent: 'center' },
   emptyText: { color: '#71717a', textAlign: 'center', fontSize: 16 },
-  msgBubble: { backgroundColor: '#121214', padding: 15, borderRadius: 16, marginBottom: 10, alignSelf: 'flex-start', maxWidth: '85%', borderWidth: 1, borderColor: '#27272a' },
+  msgBubble: {
+    backgroundColor: '#121214',
+    padding: 15,
+    borderRadius: 16,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+    maxWidth: '85%',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
   msgAuthor: { color: '#5865F2', fontSize: 12, fontWeight: 'bold', marginBottom: 5 },
   msgText: { color: '#fafafa', fontSize: 15 },
-  bottomBar: { flexDirection: 'row', padding: 20, backgroundColor: '#121214', borderTopWidth: 1, borderTopColor: '#27272a', alignItems: 'center', gap: 10 },
-  micBtnSmall: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#18181b', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#27272a' },
-  chatInput: { flex: 1, backgroundColor: '#09090b', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 12, color: '#fafafa', borderWidth: 1, borderColor: '#27272a' },
-  sendBtn: { backgroundColor: '#5865F2', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#121214', borderBottomWidth: 1, borderBottomColor: '#27272a' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fafafa' },
-  settingsCard: { backgroundColor: '#121214', borderRadius: 16, padding: 15, borderWidth: 1, borderColor: '#27272a', marginBottom: 15 },
-  callGrid: { flex: 1, padding: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 15, justifyContent: 'center', alignContent: 'center' },
-  callSquare: { backgroundColor: '#121214', borderWidth: 1, borderColor: '#5865F2', borderRadius: 24, padding: 20, width: '45%', aspectRatio: 1, justifyContent: 'space-between' },
+  bottomBar: {
+    flexDirection: 'row',
+    padding: 20,
+    backgroundColor: '#121214',
+    borderTopWidth: 1,
+    borderTopColor: '#27272a',
+    alignItems: 'center',
+    gap: 10,
+  },
+  micBtnSmall: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#18181b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  chatInput: {
+    flex: 1,
+    backgroundColor: '#09090b',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    color: '#fafafa',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  sendBtn: {
+    backgroundColor: '#5865F2',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callGrid: {
+    flex: 1,
+    padding: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 15,
+    justifyContent: 'center',
+    alignContent: 'center',
+  },
+  callSquare: {
+    backgroundColor: '#121214',
+    borderWidth: 1,
+    borderColor: '#5865F2',
+    borderRadius: 24,
+    padding: 20,
+    width: '45%',
+    aspectRatio: 1,
+    justifyContent: 'space-between',
+  },
   callSquareHeader: { width: '100%', zIndex: 2 },
   callSquareName: { color: '#fafafa', fontSize: 18, fontWeight: 'bold' },
   callSquareIp: { color: '#a1a1aa', fontSize: 12, marginTop: 2 },
-  endCallBtn: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#da373c', justifyContent: 'center', alignItems: 'center' },
-  newParticipantCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#121214', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#5865F2', position: 'relative' },
+  endCallBtn: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#da373c',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newParticipantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121214',
+    padding: 15,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#5865F2',
+    position: 'relative',
+  },
   avatarContainer: { position: 'relative' },
-  avatarBig: { width: 50, height: 50, borderRadius: 16, backgroundColor: '#3b2d5c', justifyContent: 'center', alignItems: 'center' },
-  avatarTextBig: { color: '#d4b8ff', fontWeight: 'bold', fontSize: 22 },
-  onlineDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#23a559', position: 'absolute', bottom: -2, right: -2, borderWidth: 2, borderColor: '#121214' },
+  onlineDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#23a559',
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    borderWidth: 2,
+    borderColor: '#121214',
+  },
   participantNameBig: { color: '#fafafa', fontSize: 18, fontWeight: 'bold' },
-  ipBadge: { backgroundColor: '#0f2e2d', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  ipBadge: {
+    backgroundColor: '#0f2e2d',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
   ipText: { color: '#23a559', fontSize: 12, fontWeight: 'bold' },
-  
-  // НОВЫЕ СТИЛИ ДЛЯ ВКЛАДОК
-  tabBar: { flexDirection: 'row', backgroundColor: '#121214', borderTopWidth: 1, borderTopColor: '#27272a', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10 },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  tabText: { fontSize: 12, fontWeight: '600', color: '#71717a' },
-  
-  // СТИЛИ ДЛЯ ЧАТОВ
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#121214', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 10, borderWidth: 1, borderColor: '#27272a' },
-  searchInput: { flex: 1, color: '#fff', marginLeft: 10, fontSize: 16 },
-  chatItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#18181b' },
-  chatAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3b2d5c', justifyContent: 'center', alignItems: 'center' },
-  chatAvatarText: { color: '#d4b8ff', fontSize: 20, fontWeight: 'bold' },
-  chatInfo: { flex: 1, marginLeft: 15, justifyContent: 'center' },
-  chatRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  chatName: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  chatTime: { color: '#71717a', fontSize: 12 },
-  chatLastMsg: { color: '#a1a1aa', fontSize: 14 },
-  
-  // СТИЛИ ДЛЯ ИГРОВОЙ ЗОНЫ
-  gameCard: { backgroundColor: '#121214', borderRadius: 20, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#27272a' },
-  gameTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginTop: 10 },
-  gameSubtitle: { color: '#71717a', marginBottom: 20 },
-  
-  // СТИЛИ ДЛЯ ПРОФИЛЯ
-  profileAvatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#3b2d5c', justifyContent: 'center', alignItems: 'center', marginTop: 40 },
-  codeBadge: { backgroundColor: '#0f2e2d', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 15 },
+  primaryBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#5865F2',
+    borderRadius: 16,
+    padding: 18,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#09090b',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    paddingHorizontal: 15,
+    marginBottom: 20,
+  },
+  input: { flex: 1, color: '#fafafa', paddingVertical: 16, fontSize: 16 },
+  inputIcon: { marginRight: 10 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#121214',
+    borderRadius: 20,
+    padding: 25,
+    width: width * 0.85,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
 });
